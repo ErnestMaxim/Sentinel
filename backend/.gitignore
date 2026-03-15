@@ -1,2 +1,8 @@
 .venv
 .env
+*.bin
+*.pkl
+*.jsonl
+*.json
+*.pdf
+*__pycache__
