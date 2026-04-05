@@ -19,7 +19,6 @@ ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM_NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
 
-
 @dataclass
 class PaperRecord:
     arxiv_id: str
@@ -32,6 +31,7 @@ class PaperRecord:
     top_category: str
     top_category_name: str
     subcategory_name: str
+
 
 def build_session() -> requests.Session:
     session = requests.Session()
@@ -172,11 +172,13 @@ def balance_dataset(records: list[PaperRecord], max_per_class: int, min_per_clas
         rng.shuffle(items)
         selected = items[:max_per_class]
         balanced.extend(selected)
-       
+
     return balanced
 
 
-def stratified_split(records: list[PaperRecord], train: float, val: float, seed: int) -> tuple[list[PaperRecord], list[PaperRecord], list[PaperRecord]]:
+def stratified_split(
+    records: list[PaperRecord], train: float, val: float, seed: int
+) -> tuple[list[PaperRecord], list[PaperRecord], list[PaperRecord]]:
     by_label: dict[str, list[PaperRecord]] = defaultdict(list)
     for r in records:
         by_label[r.top_category_name].append(r)

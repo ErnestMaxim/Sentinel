@@ -4,13 +4,11 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Date
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
-
-class DocumentStatus(enum.Enum):
+class DocumentStatus(str, enum.Enum):
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
-
 
 class User(Base):
     __tablename__ = "users"
@@ -37,6 +35,7 @@ class Document(Base):
     
     filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)  
+    word_count = Column(Integer, nullable=True)
     
     status = Column(Enum(DocumentStatus), default=DocumentStatus.PENDING, nullable=False) 
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -61,7 +60,7 @@ class PlagiarismReport(Base):
     
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    ai_model_used = Column(String, default="all-mpnet-base-v2", nullable=False)
+    ai_model_used = Column(String, default="allenai/specter", nullable=False)
     faiss_index_version = Column(String, default="v1.0", nullable=False)
     similarity_threshold = Column(Float, nullable=False)
     processing_time_seconds = Column(Float, nullable=True)
