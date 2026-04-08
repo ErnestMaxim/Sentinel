@@ -1,0 +1,376 @@
+/* ── Sidebar ─────────────────────────────────── */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  z-index: 100;
+  background: rgba(11, 13, 20, 0.52);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px 20px;
+  overflow: hidden;
+  transition: width 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collapsed {
+  width: 64px;
+}
+
+/* ── Logo row ────────────────────────────────── */
+.logoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.collapsed .logoRow {
+  justify-content: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.logoText {
+  color: #f4f7ff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 200ms ease 100ms;
+}
+
+.collapsed .logoText {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.collapseBtn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(244, 247, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 200ms, color 200ms, border-color 200ms;
+  padding: 0;
+}
+
+.collapseBtn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f4f7ff;
+}
+
+/* ── Separator ───────────────────────────────── */
+.sep {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 12px 0;
+  flex-shrink: 0;
+}
+
+/* ── Nav ─────────────────────────────────────── */
+.nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: rgba(244, 247, 255, 0.55);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  transition: background 130ms, color 130ms, padding 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collapsed .item {
+  justify-content: center;
+  padding: 9px;
+}
+
+.item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #f4f7ff;
+}
+
+.active {
+  background: rgba(255, 220, 0, 0.12);
+  color: #FFDC00;
+}
+
+.active:hover {
+  background: rgba(255, 220, 0, 0.16);
+  color: #FFDC00;
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.label {
+  line-height: 1;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 180ms ease 120ms;
+}
+
+.collapsed .label {
+  opacity: 0;
+  transition: opacity 100ms ease;
+  width: 0;
+}
+
+/* ── Sign out button ─────────────────────────── */
+.signOutBtn {
+  color: rgba(244, 247, 255, 0.45);
+}
+
+.signOutBtn:hover {
+  background: rgba(255, 80, 80, 0.1);
+  color: #ff8080;
+}
+
+/* ── User row ────────────────────────────────── */
+.userRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  margin-bottom: 4px;
+  overflow: hidden;
+  transition: padding 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.collapsed .userRow {
+  justify-content: center;
+  padding: 8px;
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #FFDC00;
+  color: #0b0d10;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.02em;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 180ms ease 120ms;
+  min-width: 0;
+}
+
+.collapsed .userInfo {
+  opacity: 0;
+  width: 0;
+  transition: opacity 100ms ease;
+}
+
+.userName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f4f7ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+
+.userEmail {
+  font-size: 11px;
+  color: rgba(244, 247, 255, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+
+/* ── Sidebar footer ──────────────────────────── */
+.sidebarFooter {
+  flex-shrink: 0;
+}
+
+.collapsed .sidebarFooter .item {
+  justify-content: center;
+  padding: 9px;
+}
+
+.cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  background: #FFDC00;
+  color: #0b0d10;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: filter 120ms, transform 120ms, padding 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cta:hover {
+  filter: brightness(0.93);
+  transform: translateY(-1px);
+}
+
+.ctaCollapsed {
+  padding: 10px;
+}
+
+/* ── Mobile bar ──────────────────────────────── */
+.mobileBar {
+  display: none;
+}
+
+.backdrop {
+  display: none;
+}
+
+/* ── Responsive ──────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 220px;
+    transform: translateX(-100%);
+    transition: transform 380ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .collapsed {
+    width: 220px;
+  }
+
+  .mobileOpen {
+    transform: translateX(0);
+    box-shadow: 4px 0 40px rgba(0, 0, 0, 0.7);
+  }
+
+  .mobileBar {
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 99;
+    height: 56px;
+    background: rgba(11, 13, 20, 0.75);
+    backdrop-filter: blur(18px) saturate(145%);
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+
+  .mobileLogo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+  }
+
+  .mobileLogoImg {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 6px rgba(255, 220, 0, 0.4));
+  }
+
+  .mobileLogoText {
+    color: #f4f7ff;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .hamburger span {
+    display: block;
+    width: 16px;
+    height: 1.5px;
+    background: #f4f7ff;
+    border-radius: 2px;
+  }
+
+  .backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+  }
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
 import styles from './SigninPage.module.css'
 import backgroundVideo from '../../assets/videos/background.mp4'
 import sentinelLogo from '../../assets/images/sentinel_logo.png'
@@ -16,6 +17,7 @@ export default function SigninPage() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
   const navigate = useNavigate()
+  const { refreshUser } = useAuth()
 
   const form = useForm({
     defaultValues: {
@@ -26,7 +28,7 @@ export default function SigninPage() {
       setSubmitError(null)
       setSubmitSuccess(null)
 
-      const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+      const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
 
       try {
         const response = await fetch(`${apiBase}/auth/login`, {
@@ -60,16 +62,23 @@ export default function SigninPage() {
         }
 
         localStorage.setItem('access_token', token)
-        setSubmitSuccess('Signed in successfully.')
 
-        setTimeout(() => {
-          navigate('/')
-        }, 500)
+        // Fetch user profile immediately so navbar updates right away
+        await refreshUser()
+
+        setSubmitSuccess('Signed in successfully.')
+        setTimeout(() => navigate('/'), 500)
       } catch {
         setSubmitError('Unable to reach server. Please try again.')
       }
     },
   })
+
+  const handleGoogleLogin = () => {
+    const apiBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+    // Direct the browser to the backend's Google auth initiation route
+    window.location.href = `${apiBase}/auth/google`
+  }
 
   return (
     <main className={styles.page}>
@@ -113,12 +122,9 @@ export default function SigninPage() {
           >
             {(field) => {
               const hasError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-
               return (
                 <div className={styles.fieldGroup}>
-                  <label htmlFor={field.name} className={styles.label}>
-                    Email
-                  </label>
+                  <label htmlFor={field.name} className={styles.label}>Email</label>
                   <input
                     id={field.name}
                     name={field.name}
@@ -130,11 +136,11 @@ export default function SigninPage() {
                     placeholder="Enter your email"
                     className={`${styles.input} ${hasError ? styles.inputError : ''}`.trim()}
                   />
-                  {hasError ? (
+                  {hasError && (
                     <small className={styles.errorText}>
                       {field.state.meta.errors.map(String).join(', ')}
                     </small>
-                  ) : null}
+                  )}
                 </div>
               )
             }}
@@ -152,13 +158,10 @@ export default function SigninPage() {
           >
             {(field) => {
               const hasError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-
               return (
                 <div className={styles.fieldGroup}>
-                  <label htmlFor={field.name} className={styles.label}>
-                    Password
-                  </label>
-                 <input
+                  <label htmlFor={field.name} className={styles.label}>Password</label>
+                  <input
                     id={field.name}
                     name={field.name}
                     type="password"
@@ -169,11 +172,11 @@ export default function SigninPage() {
                     placeholder="Enter your password"
                     className={`${styles.input} ${hasError ? styles.inputError : ''}`.trim()}
                   />
-                  {hasError ? (
+                  {hasError && (
                     <small className={styles.errorText}>
                       {field.state.meta.errors.map(String).join(', ')}
                     </small>
-                  ) : null}
+                  )}
                 </div>
               )
             }}
@@ -187,23 +190,23 @@ export default function SigninPage() {
             )}
           </form.Subscribe>
 
-          {submitError ? (
-            <small className={styles.errorText} role="alert">
-              {submitError}
-            </small>
-          ) : null}
-
-          {submitSuccess ? (
-            <small className={styles.successText} role="status">
-              {submitSuccess}
-            </small>
-          ) : null}
+          {submitError && (
+            <small className={styles.errorText} role="alert">{submitError}</small>
+          )}
+          {submitSuccess && (
+            <small className={styles.successText} role="status">{submitSuccess}</small>
+          )}
         </form>
 
         <p className={styles.divider}>OR SIGN IN WITH</p>
 
         <div className={styles.socialRow}>
-          <button type="button" className={styles.socialButton}>
+          <button 
+            type="button" 
+            className={styles.socialButton} 
+            onClick={handleGoogleLogin}
+          >
+            <img src="/google-icon.svg" alt="" />
             Google
           </button>
         </div>

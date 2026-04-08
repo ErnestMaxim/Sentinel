@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 load_dotenv()
 
 USER = os.getenv("user")
-PASSWORD = quote_plus(os.getenv("password"))  # safely encodes @ and ! 
+PASSWORD = quote_plus(os.getenv("password"))
 HOST = os.getenv("host")
 PORT = os.getenv("port")
 DBNAME = os.getenv("dbname")

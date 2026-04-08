@@ -1,68 +1,81 @@
 import enum
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, DateTime, JSON, Enum
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+# ── Enums ────────────────────────────────────────────────────────────────────
+
 class DocumentStatus(str, enum.Enum):
-    PENDING = "pending"
-    PROCESSING = "processing"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    PENDING    = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED  = "COMPLETED"
+    FAILED     = "FAILED"
+
+
+# ── Models ───────────────────────────────────────────────────────────────────
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id              = Column(Integer,  primary_key=True, index=True)
+    first_name      = Column(String,   nullable=False)
+    last_name       = Column(String,   nullable=False)
+    email           = Column(String,   nullable=False, unique=True, index=True)
+    hashed_password = Column(String,   nullable=True)
+    google_id       = Column(String,   nullable=True,  unique=True, index=True)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    is_deleted      = Column(Boolean,  nullable=False, default=False)
+    deleted_at      = Column(DateTime, nullable=True)
 
-    is_deleted = Column(Boolean, default=False, nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
-
-    documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="user")
 
 
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
-    filename = Column(String, nullable=False)
-    file_path = Column(String, nullable=False)  
-    word_count = Column(Integer, nullable=True)
-    
-    status = Column(Enum(DocumentStatus), default=DocumentStatus.PENDING, nullable=False) 
-    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id             = Column(Integer,  primary_key=True, index=True)
+    user_id        = Column(Integer,  ForeignKey("users.id"), nullable=False)
+    filename       = Column(String,   nullable=False)
+    file_path      = Column(String,   nullable=False)
+    word_count     = Column(Integer,  nullable=True)
+    status         = Column(Enum(DocumentStatus), nullable=False, default=DocumentStatus.PENDING)
+    uploaded_at    = Column(DateTime, default=datetime.utcnow)
+    added_to_corpus = Column(Boolean, nullable=False, default=False)
+    is_deleted     = Column(Boolean,  nullable=False, default=False)
+    deleted_at     = Column(DateTime, nullable=True)
 
-    added_to_corpus = Column(Boolean, default=False, nullable=False)
-
-    is_deleted = Column(Boolean, default=False, nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
-
-    owner = relationship("User", back_populates="documents")
-    report = relationship("PlagiarismReport", back_populates="document", uselist=False, cascade="all, delete-orphan")
+    user   = relationship("User",              back_populates="documents")
+    report = relationship("PlagiarismReport",  back_populates="document", uselist=False)
 
 
 class PlagiarismReport(Base):
     __tablename__ = "plagiarism_reports"
+    __table_args__ = (UniqueConstraint("document_id"),)
 
-    id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"), unique=True, nullable=False)
-    
-    global_score = Column(Float, nullable=False)
-    report_data = Column(JSON, nullable=False)
-    
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id                       = Column(Integer,  primary_key=True, index=True)
+    document_id              = Column(Integer,  ForeignKey("documents.id"), nullable=False)
+    global_score             = Column(Float,    nullable=False)
+    report_data              = Column(JSON,     nullable=False)
+    created_at               = Column(DateTime, default=datetime.utcnow)
+    ai_model_used            = Column(String,   nullable=False)
+    faiss_index_version      = Column(String,   nullable=False)
+    similarity_threshold     = Column(Float,    nullable=False)
+    processing_time_seconds  = Column(Float,    nullable=True)
 
-    ai_model_used = Column(String, default="allenai/specter", nullable=False)
-    faiss_index_version = Column(String, default="v1.0", nullable=False)
-    similarity_threshold = Column(Float, nullable=False)
-    processing_time_seconds = Column(Float, nullable=True)
-    
     document = relationship("Document", back_populates="report")

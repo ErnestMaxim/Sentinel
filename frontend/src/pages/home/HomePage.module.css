@@ -1,0 +1,265 @@
+/* ── Page shell ──────────────────────────────── */
+.page {
+  --yellow: #FFDC00;
+  --bg: #0b0d10;
+  --bg-alt: #0f1117;
+  --text-main: #f4f7ff;
+  --text-muted: #b8c1d9;
+  --text-dim: rgba(244, 247, 255, 0.45);
+  --border: rgba(255, 255, 255, 0.08);
+  --card-bg: rgba(255, 255, 255, 0.04);
+  --card-bg-hover: rgba(255, 220, 0, 0.05);
+
+  font-family: "Sora", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+  padding-left: var(--sidebar-w, 220px);
+  /* Match sidebar animation exactly */
+  transition: padding-left 420ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  background-image:
+    repeating-linear-gradient(
+      135deg,
+      transparent,
+      transparent 38px,
+      rgba(255, 200, 0, 0.025) 38px,
+      rgba(255, 200, 0, 0.025) 39px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 60px,
+      rgba(255, 200, 0, 0.015) 60px,
+      rgba(255, 200, 0, 0.015) 61px
+    );
+}
+
+/* ── Hero ────────────────────────────────────── */
+.hero {
+  position: relative;
+  isolation: isolate;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 120px 40px 100px;
+  text-align: center;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse 70% 55% at 50% 40%, rgba(255,180,0,0.09) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 16px;
+  background: var(--yellow);
+  color: #0b0d10;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  margin-bottom: 32px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.heroTitle {
+  margin: 0 0 22px;
+  font-size: clamp(38px, 4.5vw, 68px);
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  color: var(--text-main);
+}
+
+.heroAccent {
+  color: var(--yellow);
+  display: inline-block;
+}
+
+.heroSub {
+  margin: 0 auto 44px;
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.75;
+  color: var(--text-muted);
+  max-width: 46ch;
+}
+
+.heroCta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.ctaPrimary {
+  padding: 13px 30px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0b0d10;
+  background: var(--yellow);
+  text-decoration: none;
+  border-radius: 999px;
+  display: inline-block;
+  box-shadow: 0 0 24px rgba(255,220,0,0.22);
+  transition: filter 120ms, transform 120ms;
+}
+
+.ctaPrimary:hover {
+  filter: brightness(0.93);
+  transform: translateY(-1px);
+}
+
+.ctaSecondary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  padding-bottom: 2px;
+  transition: color 140ms, border-color 140ms;
+}
+
+.ctaSecondary:hover {
+  color: var(--text-main);
+  border-color: rgba(255,255,255,0.5);
+}
+
+/* ── Section title ───────────────────────────── */
+.sectionTitle {
+  text-align: center;
+  font-size: clamp(22px, 2.5vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 48px;
+  color: var(--text-main);
+}
+
+/* ── Features ────────────────────────────────── */
+.features {
+  background: var(--bg-alt);
+  padding: 88px 40px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.featureGrid {
+  max-width: 900px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.featureCard {
+  padding: 26px 22px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  backdrop-filter: blur(4px);
+  transition: border-color 150ms, background 150ms, transform 150ms, box-shadow 150ms;
+}
+
+.featureCard:hover {
+  border-color: rgba(255,220,0,0.28);
+  background: var(--card-bg-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.featureIcon { font-size: 22px; display: block; margin-bottom: 12px; }
+.featureTitle { font-size: 14px; font-weight: 700; margin: 0 0 7px; color: var(--text-main); }
+.featureDesc  { font-size: 13px; line-height: 1.7; color: var(--text-dim); margin: 0; }
+
+/* ── How it works ────────────────────────────── */
+.how {
+  padding: 88px 40px;
+  max-width: 620px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 26px 0;
+  border-bottom: 1px solid var(--border);
+}
+.step:last-child { border-bottom: none; }
+
+.stepNum {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0b0d10;
+  background: var(--yellow);
+  padding: 6px 10px;
+  border-radius: 8px;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.stepTitle { font-size: 16px; font-weight: 700; margin: 0 0 4px; color: var(--text-main); }
+.stepDesc  { font-size: 13.5px; color: var(--text-dim); line-height: 1.65; margin: 0; }
+
+/* ── CTA banner ──────────────────────────────── */
+.banner {
+  position: relative;
+  isolation: isolate;
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  padding: 100px 40px;
+  overflow: hidden;
+}
+
+.banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse 60% 80% at 50% 50%, rgba(255,180,0,0.07) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.bannerTitle {
+  font-size: clamp(26px, 3vw, 42px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 12px;
+  color: var(--text-main);
+}
+
+.bannerSub {
+  font-size: 15px;
+  color: var(--text-muted);
+  margin: 0 auto 36px;
+  max-width: 42ch;
+}
+
+/* ── Responsive ──────────────────────────────── */
+@media (max-width: 768px) {
+  .page {
+    padding-left: 0 !important;
+    padding-top: 56px;
+  }
+
+  .hero    { padding: 60px 24px 72px; }
+  .features,
+  .banner  { padding: 64px 24px; }
+  .how     { padding: 64px 24px; }
+}

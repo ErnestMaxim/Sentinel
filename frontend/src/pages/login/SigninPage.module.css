@@ -37,8 +37,7 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0.78));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0.78));
 }
 
 .authShell {
@@ -257,6 +256,11 @@
   font-size: 12px;
 }
 
+.successText {
+  color: #9df9b5;
+  font-size: 12px;
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -266,26 +270,6 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
-  }
-}
-
-@media (max-width: 960px) {
-  .page {
-    grid-template-columns: 1fr;
-    align-items: center;
-    justify-items: center;
-    padding: 16px;
-  }
-
-  .authShell {
-    min-height: auto;
-    width: min(100%, 420px);
-    border-radius: 18px;
-    padding: 20px;
-  }
-
-  .logoStage {
-    display: none;
   }
 }
 
@@ -309,8 +293,234 @@
   display: block;
   margin: 0 auto;
   opacity: 0.9;
-  filter:
-    drop-shadow(0 16px 36px rgba(0, 0, 0, 0.4))
+  filter: drop-shadow(0 16px 36px rgba(0, 0, 0, 0.4))
     drop-shadow(0 0 18px rgba(255, 225, 70, 0.18));
 }
 
+/* ============================================ */
+/* RESPONSIVE BREAKPOINTS                      */
+/* ============================================ */
+
+/* Tablet & Small Desktop (768px - 960px) */
+@media (max-width: 960px) {
+  .page {
+    grid-template-columns: 1fr;
+    align-items: center;
+    justify-items: center;
+    padding: 20px;
+  }
+
+  .authShell {
+    width: min(100%, 480px);
+    padding: 24px;
+    border-radius: 20px;
+  }
+
+  .title {
+    font-size: clamp(28px, 2.5vw, 42px);
+  }
+
+  .form {
+    gap: 14px;
+  }
+
+  .logoStage {
+    display: none;
+  }
+}
+
+/* Tablet Landscape (641px - 767px) */
+@media (max-width: 767px) {
+  .page {
+    padding: 16px;
+  }
+
+  .authShell {
+    width: 100%;
+    padding: 20px;
+    border-radius: 16px;
+  }
+
+  .title {
+    font-size: clamp(24px, 2vw, 32px);
+  }
+
+  .subtitle {
+    font-size: 14px;
+    margin: 8px 0 18px;
+  }
+
+  .topBar {
+    margin-bottom: 14px;
+  }
+
+  .modeButton,
+  .modeButtonActive {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .input {
+    padding: 11px 12px;
+    font-size: 16px;
+  }
+
+  .submitButton {
+    padding: 12px 12px;
+    font-size: 14px;
+  }
+
+  .form {
+    gap: 14px;
+  }
+
+  .fieldGroup {
+    gap: 5px;
+  }
+}
+
+/* Mobile (max 640px) */
+@media (max-width: 640px) {
+  .page {
+    padding: 12px;
+    min-height: auto;
+  }
+
+  .authShell {
+    width: 100%;
+    padding: 18px;
+    border-radius: 14px;
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+  }
+
+  .title {
+    font-size: clamp(20px, 1.5vw, 28px);
+    margin: 0;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    margin: 6px 0 16px;
+    max-width: 100%;
+  }
+
+  .topBar {
+    margin-bottom: 14px;
+  }
+
+  .form {
+    gap: 12px;
+  }
+
+  .fieldGroup {
+    gap: 4px;
+  }
+
+  .label {
+    font-size: 13px;
+  }
+
+  .input {
+    padding: 10px 11px;
+    font-size: 16px;
+    border-radius: 10px;
+  }
+
+  .submitButton {
+    padding: 11px 12px;
+    font-size: 13px;
+    border-radius: 10px;
+    margin-top: 2px;
+  }
+
+  .modeButton,
+  .modeButtonActive {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .divider {
+    margin: 12px 0 10px;
+    font-size: 10px;
+  }
+
+  .socialButton {
+    height: 38px;
+    font-size: 13px;
+  }
+
+  .termsText {
+    font-size: 11px;
+    margin: 10px 0 0;
+  }
+
+  .errorText {
+    font-size: 11px;
+  }
+
+  .successText {
+    font-size: 11px;
+  }
+}
+
+/* Small Phones (max 480px) */
+@media (max-width: 480px) {
+  .page {
+    padding: 10px;
+  }
+
+  .authShell {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .title {
+    font-size: clamp(18px, 1.2vw, 24px);
+  }
+
+  .subtitle {
+    font-size: 12px;
+    margin: 4px 0 14px;
+  }
+
+  .input {
+    padding: 9px 10px;
+    font-size: 16px;
+    border-radius: 9px;
+  }
+
+  .submitButton {
+    padding: 10px;
+    font-size: 12px;
+    border-radius: 9px;
+  }
+
+  .form {
+    gap: 11px;
+  }
+
+  .fieldGroup {
+    gap: 3px;
+  }
+
+  .label {
+    font-size: 12px;
+  }
+
+  .modeButton,
+  .modeButtonActive {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+
+  .closeButton {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+
+  .socialButton {
+    height: 36px;
+    font-size: 12px;
+  }
+}
