@@ -1,3 +1,17 @@
+"""
+02_chunker.py — incremental version.
+
+New flag: --incremental
+  When set, reads the existing chunked_database.jsonl to find already-processed
+  arxiv_ids, then only downloads and chunks papers that are not yet in the DB.
+  Appends new chunks to the existing file instead of overwriting it.
+
+Usage (first run — normal):
+  python 02_chunker.py
+
+Usage (after extractor adds new papers):
+  python 02_chunker.py --incremental
+"""
 from __future__ import annotations
 
 import argparse
@@ -11,7 +25,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import fitz
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -20,16 +34,15 @@ from urllib3.util.retry import Retry
 ARXIV_PDF_URL = "https://export.arxiv.org/pdf/{arxiv_id}.pdf"
 ARXIV_SRC_URL = "https://export.arxiv.org/src/{arxiv_id}"
 
-DEFAULT_INPUT = Path("backend/core/antiplagiator/data/raw/arxiv_dataset.jsonl")
+DEFAULT_INPUT  = Path("backend/core/antiplagiator/data/raw/arxiv_dataset.jsonl")
 DEFAULT_OUTPUT = Path("backend/core/antiplagiator/data/processed/chunked_database.jsonl")
 
-# Lock to prevent file corruption when multiple threads write simultaneously
 file_write_lock = threading.Lock()
-LOGGER = logging.getLogger("fast_builder")
+LOGGER = logging.getLogger("chunker")
 
 
 # ---------------------------------------------------------------------------
-# Normalization
+# Normalisation (identical to engine.py — do not change independently)
 # ---------------------------------------------------------------------------
 
 GREEK_TO_TOKEN = {
@@ -56,21 +69,10 @@ UNICODE_GREEK = {
 
 
 def normalize_text_for_fingerprint(text: str) -> str:
-    """
-    Canonical normalization applied identically to both the database chunks
-    and the query document. Consistent token output is more important than
-    human readability here — this is what makes the 7-word sliding window
-    match correctly across LaTeX source and PDF-extracted text.
-    """
-    # 1. Greek letters from LaTeX commands → uppercase ASCII tokens
     for name, token in GREEK_TO_TOKEN.items():
         text = re.sub(rf'\\{name}\b', token, text)
-
-    # 2. Unicode Greek (produced by PyMuPDF from PDFs) → same tokens
     for char, token in UNICODE_GREEK.items():
         text = text.replace(char, token)
-
-    # 3. Math structures → canonical tokens
     text = re.sub(r'\\frac\{([^{}]*)\}\{([^{}]*)\}', r'FRAC(\1,\2)', text)
     text = re.sub(r'\\sqrt\{([^{}]*)\}', r'SQRT(\1)', text)
     text = re.sub(r'\^\{([^{}]*)\}', r'^(\1)', text)
@@ -88,21 +90,12 @@ def normalize_text_for_fingerprint(text: str) -> str:
     text = re.sub(r'\\geq\b', 'GEQ', text)
     text = re.sub(r'\\neq\b', 'NEQ', text)
     text = re.sub(r'\\approx\b', 'APPROX', text)
-
-    # 4. Accents: \"o → ö, etc.
     text = re.sub(r'\\\"([aouAOU])', lambda m: m.group(1).translate(
         str.maketrans('aouAOU', 'äöüÄÖÜ')), text)
-
-    # 5. Strip remaining LaTeX commands and punctuation noise
     text = re.sub(r'\\[a-zA-Z]+\*?\s*', ' ', text)
     text = re.sub(r'[{}\[\]$]', ' ', text)
-
-    # 6. Lowercase for case-insensitive matching
     text = text.lower()
-
-    # 7. Collapse whitespace
     text = re.sub(r'\s+', ' ', text).strip()
-
     return text
 
 
@@ -112,10 +105,9 @@ def normalize_text_for_fingerprint(text: str) -> str:
 
 def build_session() -> requests.Session:
     session = requests.Session()
-    session.headers.update({"User-Agent": "SentinelFastBuilder/3.0"})
+    session.headers.update({"User-Agent": "SentinelChunker/2.0"})
     retry = Retry(
-        total=3,
-        backoff_factor=1.0,
+        total=3, backoff_factor=1.0,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods={"GET"},
     )
@@ -125,14 +117,10 @@ def build_session() -> requests.Session:
 
 
 # ---------------------------------------------------------------------------
-# LaTeX source extraction
+# LaTeX / PDF extraction
 # ---------------------------------------------------------------------------
 
 def fetch_latex_source(arxiv_id: str, session: requests.Session, timeout: int) -> str | None:
-    """
-    Download the arXiv source tarball and extract the main .tex file.
-    Returns raw LaTeX text (not yet normalized), or None if extraction fails.
-    """
     url = ARXIV_SRC_URL.format(arxiv_id=arxiv_id)
     try:
         resp = session.get(url, timeout=timeout)
@@ -141,8 +129,6 @@ def fetch_latex_source(arxiv_id: str, session: requests.Session, timeout: int) -
         content = resp.content
     except Exception:
         return None
-
-    # Try as tar.gz (most papers)
     try:
         with tarfile.open(fileobj=io.BytesIO(content)) as tar:
             tex_members = [m for m in tar.getmembers() if m.name.endswith(".tex")]
@@ -155,63 +141,38 @@ def fetch_latex_source(arxiv_id: str, session: requests.Session, timeout: int) -
             return f.read().decode("utf-8", errors="replace")
     except tarfile.TarError:
         pass
-
-    # Some older papers are a single gzipped .tex
     try:
         return gzip.decompress(content).decode("utf-8", errors="replace")
     except Exception:
         pass
-
     return None
 
 
 def strip_latex_structure(latex: str) -> str:
-    """
-    Remove LaTeX document structure (preamble, environments, commands)
-    to expose the raw text + math content before normalization.
-    """
-    # Remove comments
     latex = re.sub(r'%[^\n]*', ' ', latex)
-
-    # Remove preamble
     doc_start = re.search(r'\\begin\{document\}', latex)
     if doc_start:
         latex = latex[doc_start.end():]
-
-    # Remove bibliography
     bib_match = re.search(r'\\begin\{thebibliography\}', latex, re.IGNORECASE)
     if bib_match:
         latex = latex[:bib_match.start()]
-
-    # Unwrap formatting commands but keep their content
     for cmd in ("textbf", "textit", "emph", "text", "mathrm", "mathbf",
                 "mathit", "mathcal", "mathbb", "mathsf", "operatorname",
                 "title", "author", "section", "subsection", "subsubsection",
                 "paragraph", "caption", "label", "ref", "cite"):
         latex = re.sub(rf'\\{cmd}\*?\{{([^{{}}]*)\}}', r'\1', latex)
-
-    # Remove environment wrappers but keep content
     latex = re.sub(r'\\(begin|end)\{[^}]*\}', ' ', latex)
-
     return latex
 
 
-# ---------------------------------------------------------------------------
-# PDF fallback extraction
-# ---------------------------------------------------------------------------
-
 def extract_and_clean_pdf_text(pdf_bytes: bytes) -> str:
-    """Extract text from PDF, remove corrupted characters, cut bibliography."""
     with fitz.open(stream=io.BytesIO(pdf_bytes), filetype="pdf") as doc:
         raw_text = " ".join(page.get_text("text") for page in doc)
-
     clean_text = re.sub(r'[\x00-\x1F\x7F-\x9F]', ' ', raw_text)
     clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-
     match = re.search(r"\b(References|Bibliography)\b", clean_text, flags=re.IGNORECASE)
     if match and match.start() > (len(clean_text) * 0.75):
         clean_text = clean_text[: match.start()]
-
     return clean_text
 
 
@@ -224,7 +185,7 @@ def chunk_text(text: str, chunk_size: int, overlap: int, min_words: int) -> list
     step = chunk_size - overlap
     chunks: list[str] = []
     for i in range(0, len(words), step):
-        chunk_words = words[i : i + chunk_size]
+        chunk_words = words[i: i + chunk_size]
         if len(chunk_words) >= min_words:
             chunks.append(" ".join(chunk_words))
     return chunks
@@ -236,21 +197,23 @@ def chunk_text(text: str, chunk_size: int, overlap: int, min_words: int) -> list
 
 def process_single_paper(record: dict, session: requests.Session, args) -> list[dict]:
     """Download, normalize and chunk a single paper. Prefers LaTeX source over PDF."""
-    arxiv_id = str(record.get("arxiv_id", "")).strip()
-    title = str(record.get("title", "")).strip()
+    arxiv_id     = str(record.get("arxiv_id",     "")).strip()
+    title        = str(record.get("title",        "")).strip()
+    top_category = str(record.get("top_category", "unknown")).strip()
+
     if not arxiv_id:
         return []
 
     raw_text: str | None = None
     source_type = "unknown"
 
-    # --- Attempt 1: LaTeX source (math-faithful) ---
+    # Attempt 1: LaTeX source
     latex = fetch_latex_source(arxiv_id, session, args.timeout_sec)
     if latex:
         raw_text = strip_latex_structure(latex)
         source_type = "latex"
 
-    # --- Attempt 2: PDF fallback ---
+    # Attempt 2: PDF fallback
     if not raw_text or len(raw_text.split()) < args.min_words:
         try:
             url = ARXIV_PDF_URL.format(arxiv_id=arxiv_id)
@@ -264,21 +227,40 @@ def process_single_paper(record: dict, session: requests.Session, args) -> list[
     if not raw_text:
         return []
 
-    # Normalize BEFORE chunking so DB and query documents share the same token space.
-    # This is what makes the 7-word fingerprint windows align correctly.
     normalized_text = normalize_text_for_fingerprint(raw_text)
-
     chunks = chunk_text(normalized_text, args.chunk_size, args.overlap, args.min_words)
+
     return [
         {
-            "arxiv_id": arxiv_id,
-            "title": title,
-            "chunk_id": i,
-            "text": chunk,
-            "source_type": source_type,
+            "arxiv_id":     arxiv_id,
+            "title":        title,
+            "chunk_id":     i,
+            "text":         chunk,
+            "source_type":  source_type,
+            "top_category": top_category,
         }
         for i, chunk in enumerate(chunks)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Incremental helper
+# ---------------------------------------------------------------------------
+
+def load_already_processed_ids(output_path: Path) -> set[str]:
+    """Read existing chunked_database.jsonl and return the set of arxiv_ids already in it."""
+    if not output_path.exists():
+        return set()
+    ids: set[str] = set()
+    with output_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                try:
+                    ids.add(str(json.loads(line).get("arxiv_id", "")))
+                except json.JSONDecodeError:
+                    continue
+    LOGGER.info("Found %d already-chunked arxiv_ids in %s", len(ids), output_path)
+    return ids
 
 
 # ---------------------------------------------------------------------------
@@ -287,36 +269,67 @@ def process_single_paper(record: dict, session: requests.Session, args) -> list[
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
-    parser = argparse.ArgumentParser(description="Fast Multithreaded ArXiv PDF/LaTeX Downloader and Chunker")
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--chunk-size", type=int, default=100)
-    parser.add_argument("--overlap", type=int, default=30)
-    parser.add_argument("--min-words", type=int, default=20)
-    parser.add_argument("--timeout-sec", type=int, default=30,
-                        help="Increased default to accommodate source tarball downloads")
-    parser.add_argument("--workers", type=int, default=5, help="Number of parallel downloads")
+    parser = argparse.ArgumentParser(
+        description="Multithreaded ArXiv PDF/LaTeX Downloader and Chunker (incremental)"
+    )
+    parser.add_argument("--input",       type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("--output",      type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--chunk-size",  type=int,  default=100)
+    parser.add_argument("--overlap",     type=int,  default=30)
+    parser.add_argument("--min-words",   type=int,  default=20)
+    parser.add_argument("--timeout-sec", type=int,  default=45)
+    parser.add_argument("--workers",     type=int,  default=8)
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help=(
+            "Skip papers already present in the output file. "
+            "Appends new chunks instead of overwriting. "
+            "Use this after running the extractor with --resume."
+        ),
+    )
     args = parser.parse_args()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
+    # Load all records from the dataset JSONL
     with args.input.open("r", encoding="utf-8") as f:
-        records = [json.loads(line) for line in f if line.strip()]
+        all_records = [json.loads(line) for line in f if line.strip()]
+
+    # In incremental mode, filter to only new papers
+    if args.incremental:
+        already_done = load_already_processed_ids(args.output)
+        records = [r for r in all_records if str(r.get("arxiv_id", "")) not in already_done]
+        LOGGER.info(
+            "Incremental mode: %d total records, %d already done, %d new to process",
+            len(all_records), len(already_done), len(records),
+        )
+        write_mode = "a"  # append to existing file
+    else:
+        records = all_records
+        LOGGER.info("Full mode: processing all %d records", len(records))
+        write_mode = "w"  # overwrite
+
+    if not records:
+        LOGGER.info("Nothing new to process. Exiting.")
+        return
 
     session = build_session()
-    total_saved = 0
-    latex_count = 0
-    pdf_count = 0
+    total_saved  = 0
+    latex_count  = 0
+    pdf_count    = 0
 
     LOGGER.info(
-        "Starting to process %d documents using %d parallel workers "
-        "(LaTeX preferred, PDF fallback)...",
+        "Starting %d documents using %d parallel workers (LaTeX preferred, PDF fallback)...",
         len(records), args.workers,
     )
 
-    with args.output.open("w", encoding="utf-8") as out_f:
+    with args.output.open(write_mode, encoding="utf-8") as out_f:
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = {executor.submit(process_single_paper, rec, session, args): rec for rec in records}
+            futures = {
+                executor.submit(process_single_paper, rec, session, args): rec
+                for rec in records
+            }
 
             for future in as_completed(futures):
                 result_rows = future.result()
@@ -333,13 +346,12 @@ def main() -> None:
 
                 if total_saved % 1000 == 0 and total_saved > 0:
                     LOGGER.info(
-                        "-> Saved %d chunks so far (latex papers: %d, pdf fallbacks: %d)",
+                        "-> Saved %d chunks so far (latex: %d, pdf: %d)",
                         total_saved, latex_count, pdf_count,
                     )
 
     LOGGER.info(
-        "Finished! Saved %d clean text chunks total. "
-        "LaTeX sourced: %d papers | PDF fallback: %d papers.",
+        "Finished! Saved %d new chunks. LaTeX: %d papers | PDF: %d papers.",
         total_saved, latex_count, pdf_count,
     )
 

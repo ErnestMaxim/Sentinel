@@ -42,19 +42,43 @@
 .hero {
   position: relative;
   isolation: isolate;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 120px 40px 100px;
-  text-align: center;
+  min-height: calc(100vh - 0px);
+  max-height: 820px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
 }
 
 .hero::before {
+  display: none;
+}
+
+.hero::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: -1;
-  background: radial-gradient(ellipse 70% 55% at 50% 40%, rgba(255,180,0,0.09) 0%, transparent 70%);
+  z-index: 0;
   pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgba(11,13,16,0.4) 0%, transparent 15%),
+    linear-gradient(to top,    rgba(11,13,16,1.0) 0%, transparent 22%),
+    linear-gradient(to right,  rgba(11,13,16,0.6) 0%, transparent 12%),
+    linear-gradient(to left,   rgba(11,13,16,0.3) 0%, transparent 12%);
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 40px;
+  max-width: 720px;
+  width: 100%;
 }
 
 .heroBadge {
@@ -258,8 +282,15 @@
     padding-top: 56px;
   }
 
-  .hero    { padding: 60px 24px 72px; }
+  .hero {
+    min-height: 520px;
+    max-height: none;
+  }
   .features,
   .banner  { padding: 64px 24px; }
   .how     { padding: 64px 24px; }
+  .heroContent {
+    padding: 0 24px;
+    margin-left: 0;
+  }
 }

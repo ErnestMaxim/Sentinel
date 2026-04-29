@@ -13,9 +13,11 @@
     "@tanstack/react-form-nextjs": "^1.28.6",
     "@tanstack/react-form-remix": "^1.28.6",
     "@tanstack/react-form-start": "^1.28.6",
+    "@types/three": "^0.183.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.14.0"
+    "react-router-dom": "^7.14.0",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
