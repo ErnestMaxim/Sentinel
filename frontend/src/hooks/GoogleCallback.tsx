@@ -11,16 +11,13 @@ export default function GoogleCallback() {
     const token = searchParams.get('token')
 
     if (token) {
-      // 1. Save the JWT issued by your backend
       localStorage.setItem('access_token', token)
-      
-      // 2. Refresh the AuthContext to get user details (first_name, email, etc.)
+
       refreshUser().then(() => {
-        // 3. Redirect to dashboard/home
+    
         navigate('/')
       })
     } else {
-      // Handle error case
       console.error('No token found in callback URL')
       navigate('/signin')
     }

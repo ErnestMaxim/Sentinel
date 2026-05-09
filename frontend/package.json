@@ -14,6 +14,8 @@
     "@tanstack/react-form-remix": "^1.28.6",
     "@tanstack/react-form-start": "^1.28.6",
     "@types/three": "^0.183.1",
+    "docx": "^9.6.1",
+    "file-saver": "^2.0.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.14.0",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/file-saver": "^2.0.7",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
