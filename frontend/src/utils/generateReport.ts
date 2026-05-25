@@ -1,11 +1,4 @@
-import {
-  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  Header, Footer, AlignmentType, BorderStyle, WidthType, ShadingType,
-  VerticalAlign,
-  type IRunOptions,
-  type IParagraphOptions,
-} from 'docx'
-import { saveAs } from 'file-saver'
+import jsPDF from 'jspdf'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,22 +11,24 @@ export interface EngineMatch {
   match_percentage:     number
   exact_copied_phrases: string[]
   db_source_type:       string
+  detection?:           'exact' | 'paraphrase'
 }
 
 export interface EngineSource {
-  arxiv_id:                   string
-  title:                      string
-  match_count:                number
-  average_similarity_percent: number
-  has_exact_copies:           boolean
-  matches:                    EngineMatch[]
+  arxiv_id:                    string
+  title:                       string
+  match_count:                 number
+  average_similarity_percent:  number
+  has_exact_copies:            boolean
+  score_contribution_percent?: number
+  matches:                     EngineMatch[]
 }
 
 export interface EngineReport {
-  file_name?:                       string
-  global_plagiarism_score_percent:  number
-  total_suspicious_sources:         number
-  total_reported_sources:           number
+  file_name?:                      string
+  global_plagiarism_score_percent: number
+  total_suspicious_sources:        number
+  total_reported_sources:          number
   document_stats: {
     total_words:           number
     total_chunks_analyzed: number
@@ -46,443 +41,517 @@ export interface EngineReport {
   sources: EngineSource[]
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+export type ReportFilter = 'all' | 'exact' | 'paraphrase'
 
-const PAGE_W  = 11906
-const PAGE_H  = 16838
-const MARGIN  = 1134
-const CONTENT = PAGE_W - MARGIN * 2
+// ── Layout constants ──────────────────────────────────────────────────────────
+
+const PW   = 210   // A4 width mm
+const PH   = 297   // A4 height mm
+const ML   = 20    // margin left
+const MR   = 20    // margin right
+const MT   = 20    // margin top
+const CW   = PW - ML - MR
+
+// ── Colour palette (all light-mode) ──────────────────────────────────────────
 
 const C = {
-  black:  '000000',
-  grey:   '666666',
-  lgrey:  'F2F2F2',
-  border: 'DDDDDD',
-  blue:   '0066CC',
-  red:    'CC0000',
-  amber:  'E67E22',
-  green:  '27AE60',
-  white:  'FFFFFF',
+  black:      [15,  15,  20]  as [number,number,number],
+  grey:       [100, 100, 110] as [number,number,number],
+  lightGrey:  [220, 220, 225] as [number,number,number],
+  bgGrey:     [248, 248, 250] as [number,number,number],
+  white:      [255, 255, 255] as [number,number,number],
+  accent:     [30,  30,  30]  as [number,number,number],   // dark text on yellow
+  yellow:     [255, 215,   0] as [number,number,number],   // Sentinel yellow
+  yellowBg:   [255, 250, 210] as [number,number,number],
+  red:        [200,  50,  50] as [number,number,number],
+  redBg:      [255, 240, 240] as [number,number,number],
+  purple:     [130,  60, 200] as [number,number,number],
+  purpleBg:   [245, 235, 255] as [number,number,number],
+  green:      [30,  160,  80] as [number,number,number],
+  greenBg:    [230, 250, 238] as [number,number,number],
+  orange:     [200, 100,  20] as [number,number,number],
+  orangeBg:   [255, 243, 225] as [number,number,number],
+  blue:       [30,  100, 200] as [number,number,number],
 }
 
-const BADGE_COLORS = [
-  'E74C3C','E67E22','2980B9','27AE60',
-  '8E44AD','F39C12','16A085','C0392B',
-]
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-// ── Low-level helpers ─────────────────────────────────────────────────────────
-
-function simColor(n: number) { return n <= 15 ? C.green : n <= 40 ? C.amber : C.red }
-
-function nb() { return { style: BorderStyle.NONE,   size: 0, color: C.white  } }
-function sb(color = C.border, size = 4) { return { style: BorderStyle.SINGLE, size, color } }
-function allB(color = C.border, size = 4) {
-  const b = sb(color, size); return { top: b, bottom: b, left: b, right: b }
-}
-function noB() { return { top: nb(), bottom: nb(), left: nb(), right: nb() } }
-
-// Use explicit IRunOptions — fixes TS2698 "Spread types may only be created from object types"
-function t(str: string, opts: IRunOptions = {}): TextRun {
-  return new TextRun({ text: String(str ?? ''), font: 'Arial', ...opts })
-}
-function b(str: string, opts: IRunOptions = {}): TextRun {
-  return t(str, { bold: true, ...opts })
+function scoreColor(pct: number): [number,number,number] {
+  if (pct <= 15) return C.green
+  if (pct <= 40) return C.orange
+  return C.red
 }
 
-// Use explicit IParagraphOptions
-function p(runs: TextRun | TextRun[], opts: IParagraphOptions = {}): Paragraph {
-  const children = Array.isArray(runs) ? runs : [runs]
-  return new Paragraph({ children, spacing: { after: 0 }, ...opts })
+function scoreBgColor(pct: number): [number,number,number] {
+  if (pct <= 15) return C.greenBg
+  if (pct <= 40) return C.orangeBg
+  return C.redBg
 }
 
-function gap(pt = 120): Paragraph {
-  return new Paragraph({ children: [], spacing: { before: pt, after: 0 } })
-}
-function hr(color = C.border): Paragraph {
-  return new Paragraph({
-    children: [],
-    border: { bottom: sb(color, 6) },
-    spacing: { before: 80, after: 80 },
-  })
-}
-function pct(n: number) { return `${Number(n ?? 0).toFixed(0)}%` }
-function pageProps() {
-  return { page: { size: { width: PAGE_W, height: PAGE_H }, margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN } } }
+function wrap(doc: jsPDF, text: string, maxW: number): string[] {
+  return doc.splitTextToSize(String(text ?? ''), maxW)
 }
 
-// ── Header / footer ───────────────────────────────────────────────────────────
-
-function makeHeader(label: string, fileName: string): Header {
-  return new Header({
-    children: [
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [CONTENT - 3000, 3000],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: CONTENT - 3000, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(C.border, 4), left: nb(), right: nb() },
-            margins: { top: 60, bottom: 80, left: 0, right: 0 },
-            children: [p([t('sentinel', { size: 18, color: C.blue }), t(`  ${label}`, { size: 16, color: C.grey })])],
-          }),
-          new TableCell({
-            width: { size: 3000, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(C.border, 4), left: nb(), right: nb() },
-            margins: { top: 60, bottom: 80, left: 0, right: 0 },
-            children: [p(t(fileName, { size: 16, color: C.grey }), { alignment: AlignmentType.RIGHT })],
-          }),
-        ]})]
-      }),
-    ],
-  })
+function hLine(doc: jsPDF, y: number, color = C.lightGrey, lw = 0.3) {
+  doc.setDrawColor(...color)
+  doc.setLineWidth(lw)
+  doc.line(ML, y, PW - MR, y)
 }
 
-function makeFooter(label: string, submissionId: string): Footer {
-  return new Footer({
-    children: [
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [CONTENT / 2, CONTENT / 2],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: CONTENT / 2, type: WidthType.DXA },
-            borders: { top: sb(C.border, 4), bottom: nb(), left: nb(), right: nb() },
-            margins: { top: 80, bottom: 60, left: 0, right: 0 },
-            children: [p([t('sentinel', { size: 16, color: C.blue }), t(`  ${label}`, { size: 16, color: C.grey })])],
-          }),
-          new TableCell({
-            width: { size: CONTENT / 2, type: WidthType.DXA },
-            borders: { top: sb(C.border, 4), bottom: nb(), left: nb(), right: nb() },
-            margins: { top: 80, bottom: 60, left: 0, right: 0 },
-            children: [p(t(`Submission ID  ${submissionId}`, { size: 16, color: C.grey }), { alignment: AlignmentType.RIGHT })],
-          }),
-        ]})]
-      }),
-    ],
-  })
+function fillRect(doc: jsPDF, x: number, y: number, w: number, h: number, color: [number,number,number]) {
+  doc.setFillColor(...color)
+  doc.rect(x, y, w, h, 'F')
+}
+
+function addPage(doc: jsPDF) {
+  doc.addPage()
+  fillRect(doc, 0, 0, PW, PH, C.white)
+}
+
+// ── Header / footer printed on every page ────────────────────────────────────
+
+function pageHeader(doc: jsPDF, docName: string, pageNum: number, totalPages: number) {
+  // Top yellow bar
+  fillRect(doc, 0, 0, PW, 12, C.yellow)
+
+  // "SENTINEL" wordmark
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...C.black)
+  doc.text('SENTINEL', ML, 8)
+
+  // doc name truncated
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(60, 60, 60)
+  const maxNameW = CW - 40
+  const nameLines = wrap(doc, docName, maxNameW)
+  doc.text(nameLines[0], ML + 22, 8)
+
+  // page number right
+  doc.setTextColor(80, 80, 80)
+  doc.text(`${pageNum} / ${totalPages}`, PW - MR, 8, { align: 'right' })
+}
+
+function pageFooter(doc: jsPDF, submissionId: string, date: string) {
+  hLine(doc, PH - 10, C.lightGrey)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...C.grey)
+  doc.text(`Submission ID: ${submissionId}`, ML, PH - 5)
+  doc.text(date, PW - MR, PH - 5, { align: 'right' })
 }
 
 // ── Page 1: Cover ─────────────────────────────────────────────────────────────
 
-function coverSection(data: EngineReport, submissionId: string, submDate: string, totalPages: number) {
-  const label    = `Page 1 of ${totalPages} - Cover Page`
-  const docTitle = data.file_name!.replace(/\.[^/.]+$/, '')
-  const words    = data.document_stats.total_words ?? 0
-  const chunks   = data.document_stats.total_chunks_analyzed ?? 0
+function renderCover(
+  doc: jsPDF,
+  data: EngineReport,
+  submissionId: string,
+  date: string,
+  filter: ReportFilter,
+  totalPages: number,
+) {
+  const fileName = data.file_name ?? 'Document'
+  pageHeader(doc, fileName, 1, totalPages)
+  pageFooter(doc, submissionId, date)
 
-  return {
-    properties: pageProps(),
-    headers: {
-      default: new Header({ children: [
-        new Table({
-          width: { size: CONTENT, type: WidthType.DXA },
-          columnWidths: [CONTENT - 2800, 2800],
-          rows: [new TableRow({ children: [
-            new TableCell({
-              width: { size: CONTENT - 2800, type: WidthType.DXA }, borders: noB(),
-              margins: { top: 60, bottom: 60, left: 0, right: 0 },
-              children: [p(t('sentinel', { size: 24, color: C.blue }))],
-            }),
-            new TableCell({
-              width: { size: 2800, type: WidthType.DXA }, borders: noB(),
-              margins: { top: 60, bottom: 60, left: 0, right: 0 },
-              children: [p(t(label, { size: 16, color: C.grey }), { alignment: AlignmentType.RIGHT })],
-            }),
-          ]})]
-        }),
-      ]}),
-    },
-    footers: { default: makeFooter(label, submissionId) },
-    children: [
-      ...Array(12).fill(null).map(() => gap(180)),
-      p(b(docTitle, { size: 60 })),
-      gap(80),
-      p(b(data.file_name!, { size: 36 })),
-      gap(60),
-      p(t('Sentinel  ·  Academic Integrity System  ·  Plagiarism Detection', { size: 20, color: C.grey })),
-      gap(240), hr(), gap(160),
-      p(b('Document Details', { size: 26 }), { spacing: { after: 120 } }),
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [CONTENT - 2800, 2800],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: CONTENT - 2800, type: WidthType.DXA }, borders: noB(),
-            margins: { top: 0, bottom: 0, left: 0, right: 200 },
-            children: [
-              p(b('Submission ID', { size: 17, color: C.grey })),
-              p(b(submissionId, { size: 20 })), gap(100),
-              p(b('Submission Date', { size: 17, color: C.grey })),
-              p(b(submDate, { size: 20 })), gap(100),
-              p(b('File Name', { size: 17, color: C.grey })),
-              p(b(data.file_name!, { size: 20 })),
-            ],
-          }),
-          new TableCell({
-            width: { size: 2800, type: WidthType.DXA },
-            borders: allB(C.border, 4),
-            shading: { fill: C.lgrey, type: ShadingType.CLEAR },
-            margins: { top: 200, bottom: 200, left: 200, right: 200 },
-            verticalAlign: VerticalAlign.CENTER,
-            children: [
-              p(b(`${chunks} Chunks`, { size: 22 })), gap(80),
-              p(b(`${words.toLocaleString()} Words`, { size: 22 })), gap(80),
-              p(b(`${Math.round(words * 5.5).toLocaleString()} Characters`, { size: 22 })),
-            ],
-          }),
-        ]})]
-      }),
-    ],
-  }
-}
+  let y = MT + 8
 
-// ── Page 2: Integrity Overview ────────────────────────────────────────────────
+  // ── Title block ──────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  doc.setTextColor(...C.black)
+  doc.text('Originality Report', ML, y)
+  y += 7
 
-function overviewSection(data: EngineReport, submissionId: string, totalPages: number) {
-  const label   = `Page 2 of ${totalPages} - Integrity Overview`
-  const sim     = data.global_plagiarism_score_percent
-  const sColor  = simColor(sim)
-  const sources = data.sources
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...C.grey)
+  doc.text('Sentinel Anti-Plagiarism Platform', ML, y)
+  y += 8
 
-  return {
-    properties: pageProps(),
-    headers: { default: makeHeader(label, data.file_name!) },
-    footers: { default: makeFooter(label, submissionId) },
-    children: [
-      gap(160),
-      p([b(`${pct(sim)}`, { size: 72, color: sColor }), t('  Overall Similarity', { size: 40 })]),
-      gap(60),
-      p(t('The combined total of all matches, including overlapping sources, for each database.', { size: 20, color: C.grey })),
-      gap(200), hr(), gap(160),
-      p(b('Filtered from the Report', { size: 22 }), { spacing: { after: 100 } }),
-      p(t('▸  Bibliography', { size: 20 })), gap(60),
-      p(t('▸  Quoted Text', { size: 20 })),
-      gap(200), hr(), gap(160),
-      p(b('Top Sources', { size: 22 }), { spacing: { after: 100 } }),
-      ...[
-        [pct(sim), 'Publications (Academic Index)'],
-        [pct(sources.filter(s => s.has_exact_copies).length > 0 ? Math.round(sim * 0.6) : 0), 'Exact matches detected'],
-        [pct(Math.round(sim * 0.3)), 'Submitted works (Student Papers)'],
-      ].map(([pctVal, lbl]) => new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [800, CONTENT - 800],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: 800, type: WidthType.DXA }, borders: noB(),
-            margins: { top: 40, bottom: 40, left: 0, right: 120 },
-            children: [p(b(String(pctVal), { size: 22, color: C.grey }))],
-          }),
-          new TableCell({
-            width: { size: CONTENT - 800, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(C.border, 2), left: nb(), right: nb() },
-            margins: { top: 40, bottom: 80, left: 0, right: 0 },
-            children: [p(t(String(lbl), { size: 20 }))],
-          }),
-        ]})]
-      })),
-    ],
-  }
-}
+  hLine(doc, y, C.lightGrey, 0.5)
+  y += 7
 
-// ── Page 3: Top Sources ───────────────────────────────────────────────────────
+  // ── File name ────────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...C.black)
+  const nameLines = wrap(doc, fileName, CW)
+  doc.text(nameLines, ML, y)
+  y += nameLines.length * 5.5 + 3
 
-function topSourcesSection(data: EngineReport, submissionId: string, totalPages: number) {
-  const label = `Page 3 of ${totalPages} - Integrity Overview`
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...C.grey)
+  doc.text(`Submitted: ${date}`, ML, y);    y += 4.5
+  doc.text(`Submission ID: ${submissionId}`, ML, y); y += 4.5
 
-  const rows = data.sources.flatMap((src, i) => {
-    const bg = BADGE_COLORS[i % BADGE_COLORS.length]
-    return [
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [560, 1800, CONTENT - 2360],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: 560, type: WidthType.DXA }, borders: noB(),
-            shading: { fill: bg, type: ShadingType.CLEAR },
-            margins: { top: 60, bottom: 60, left: 0, right: 0 },
-            children: [p(b(String(i + 1), { size: 20, color: C.white }), { alignment: AlignmentType.CENTER })],
-          }),
-          new TableCell({
-            width: { size: 1800, type: WidthType.DXA }, borders: noB(),
-            margins: { top: 60, bottom: 60, left: 120, right: 0 },
-            children: [p(t('Publication', { size: 18, color: bg }))],
-          }),
-          new TableCell({
-            width: { size: CONTENT - 2360, type: WidthType.DXA }, borders: noB(),
-            margins: { top: 60, bottom: 60, left: 0, right: 0 },
-            children: [p([])],
-          }),
-        ]})]
-      }),
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [CONTENT - 600, 600],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: CONTENT - 600, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(C.border, 2), left: nb(), right: nb() },
-            margins: { top: 40, bottom: 100, left: 0, right: 0 },
-            children: [p(b(src.title || src.arxiv_id, { size: 20 }))],
-          }),
-          new TableCell({
-            width: { size: 600, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(C.border, 2), left: nb(), right: nb() },
-            margins: { top: 40, bottom: 100, left: 0, right: 0 },
-            children: [p(b(pct(src.average_similarity_percent), { size: 20 }), { alignment: AlignmentType.RIGHT })],
-          }),
-        ]})]
-      }),
-      gap(40),
-    ]
+  const filterLabel = filter === 'exact' ? 'Exact matches only'
+    : filter === 'paraphrase' ? 'Paraphrases only' : 'All matches'
+  doc.text(`Report filter: ${filterLabel}`, ML, y)
+  y += 10
+
+  // ── Score card ───────────────────────────────────────────────────────────
+  const sim    = data.global_plagiarism_score_percent ?? 0
+  const sCol   = scoreColor(sim)
+  const sBgCol = scoreBgColor(sim)
+
+  fillRect(doc, ML, y, CW, 28, C.bgGrey)
+  doc.setDrawColor(...C.lightGrey)
+  doc.setLineWidth(0.3)
+  doc.rect(ML, y, CW, 28)
+
+  // Left: big score
+  fillRect(doc, ML, y, 44, 28, sBgCol)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(22)
+  doc.setTextColor(...sCol)
+  doc.text(`${sim.toFixed(1)}%`, ML + 22, y + 13, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...sCol)
+  doc.text('SIMILARITY', ML + 22, y + 20, { align: 'center' })
+
+  // Right: three stats
+  const stats = [
+    { label: 'Sources Found',    val: String(data.total_reported_sources ?? data.sources?.length ?? 0) },
+    { label: 'Chunks Analyzed',  val: String(data.document_stats?.total_chunks_analyzed ?? 0) },
+    { label: 'Total Words',      val: (data.document_stats?.total_words ?? 0).toLocaleString() },
+  ]
+  const colW = (CW - 48) / stats.length
+  stats.forEach((s, i) => {
+    const sx = ML + 48 + i * colW + colW / 2
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(...C.black)
+    doc.text(s.val, sx, y + 13, { align: 'center' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C.grey)
+    doc.text(s.label.toUpperCase(), sx, y + 20, { align: 'center' })
+
+    if (i < stats.length - 1) {
+      doc.setDrawColor(...C.lightGrey)
+      doc.setLineWidth(0.3)
+      doc.line(ML + 48 + (i + 1) * colW, y + 4, ML + 48 + (i + 1) * colW, y + 24)
+    }
   })
+  y += 34
 
-  return {
-    properties: pageProps(),
-    headers: { default: makeHeader(label, data.file_name!) },
-    footers: { default: makeFooter(label, submissionId) },
-    children: [
-      gap(160),
-      p(b('Top Sources', { size: 28 }), { spacing: { after: 60 } }),
-      p(t('The sources with the highest number of matches. Overlapping sources will not be displayed.', { size: 18, color: C.grey })),
-      gap(180),
-      ...rows,
-    ],
+  // ── Sources table ────────────────────────────────────────────────────────
+  if ((data.sources?.length ?? 0) === 0) {
+    fillRect(doc, ML, y, CW, 20, C.greenBg)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.setTextColor(...C.green)
+    doc.text('✓  No plagiarism detected — your document appears to be original.', ML + 6, y + 13)
+    return
   }
+
+  // Table header
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...C.black)
+  doc.text('Matched Sources', ML, y)
+  y += 5
+  hLine(doc, y, C.black, 0.5)
+  y += 3
+
+  // Column header row
+  fillRect(doc, ML, y, CW, 6, C.bgGrey)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...C.grey)
+  doc.text('TYPE',   ML + 2,          y + 4)
+  doc.text('SOURCE', ML + 24,         y + 4)
+  doc.text('MATCHES',PW - MR - 38,    y + 4, { align: 'right' })
+  doc.text('SIM %',  PW - MR,         y + 4, { align: 'right' })
+  y += 6
+  hLine(doc, y, C.lightGrey)
+  y += 1
+
+  data.sources.forEach((src, i) => {
+    if (y > PH - 22) return   // overflow guard
+
+    const rowH  = 13
+    const isOdd = i % 2 === 1
+    if (isOdd) fillRect(doc, ML, y, CW, rowH, C.bgGrey)
+
+    // Detection badge
+    const isExact   = src.has_exact_copies
+    const badgeCol  = isExact ? C.red : C.purple
+    const badgeBg   = isExact ? C.redBg : C.purpleBg
+    const badgeTxt  = isExact ? 'EXACT' : 'PARA.'
+    fillRect(doc, ML + 1, y + 2, 18, 5, badgeBg)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(5.5)
+    doc.setTextColor(...badgeCol)
+    doc.text(badgeTxt, ML + 10, y + 5.8, { align: 'center' })
+
+    // Source number + title
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...C.black)
+    const titleLines = wrap(doc, `${i + 1}.  ${src.title || src.arxiv_id}`, CW - 60)
+    doc.text(titleLines[0], ML + 24, y + 5.5)
+
+    // arXiv link
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C.blue)
+    doc.text(`arxiv.org/abs/${src.arxiv_id}`, ML + 24, y + 10)
+    doc.link(ML + 24, y + 7, 65, 4, { url: `https://arxiv.org/abs/${src.arxiv_id}` })
+
+    // Match count
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...C.grey)
+    doc.text(`${src.match_count}`, PW - MR - 38, y + 6, { align: 'right' })
+
+    // Similarity %
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...scoreColor(src.average_similarity_percent))
+    doc.text(`${src.average_similarity_percent.toFixed(1)}%`, PW - MR, y + 6, { align: 'right' })
+
+    y += rowH
+    hLine(doc, y, C.lightGrey, 0.2)
+  })
 }
 
-// ── Pages 4+: Per-source detail ───────────────────────────────────────────────
+// ── Pages 2+: Per-source detail ───────────────────────────────────────────────
 
-function detailSection(
+function renderSource(
+  doc: jsPDF,
   src: EngineSource,
   srcIndex: number,
   pageNum: number,
   totalPages: number,
   fileName: string,
   submissionId: string,
+  date: string,
+  filter: ReportFilter,
 ) {
-  const label = `Page ${pageNum} of ${totalPages} - Integrity Submission`
-  const bg    = BADGE_COLORS[srcIndex % BADGE_COLORS.length]
+  pageHeader(doc, fileName, pageNum, totalPages)
+  pageFooter(doc, submissionId, date)
 
-  const children: (Paragraph | Table)[] = [
-    gap(120),
-    new Table({
-      width: { size: CONTENT, type: WidthType.DXA },
-      columnWidths: [CONTENT - 1600, 1600],
-      rows: [new TableRow({ children: [
-        new TableCell({
-          width: { size: CONTENT - 1600, type: WidthType.DXA }, borders: noB(),
-          margins: { top: 60, bottom: 60, left: 0, right: 160 },
-          children: [
-            p(b(`Source ${srcIndex + 1}`, { size: 32, color: bg })), gap(40),
-            p(t(src.title || src.arxiv_id, { size: 22 })), gap(40),
-            p(t(`arXiv: ${src.arxiv_id}  ·  ${src.match_count} match${src.match_count !== 1 ? 'es' : ''}`, { size: 18, color: C.grey })),
-          ],
-        }),
-        new TableCell({
-          width: { size: 1600, type: WidthType.DXA },
-          borders: allB(bg, 6),
-          shading: { fill: C.lgrey, type: ShadingType.CLEAR },
-          margins: { top: 80, bottom: 80, left: 140, right: 140 },
-          verticalAlign: VerticalAlign.CENTER,
-          children: [
-            p(b(pct(src.average_similarity_percent), { size: 48, color: bg }), { alignment: AlignmentType.CENTER }),
-            p(t(src.has_exact_copies ? 'EXACT COPY' : 'PARAPHRASE', { size: 16, color: bg }), { alignment: AlignmentType.CENTER }),
-          ],
-        }),
-      ]})]
-    }),
-    gap(120), hr(), gap(120),
-  ]
-
-  ;(src.matches || []).forEach(m => {
-    children.push(
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [480, CONTENT - 480],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: 480, type: WidthType.DXA }, borders: noB(),
-            shading: { fill: bg, type: ShadingType.CLEAR },
-            margins: { top: 80, bottom: 80, left: 0, right: 0 },
-            verticalAlign: VerticalAlign.TOP,
-            children: [p(b(String(srcIndex + 1), { size: 20, color: C.white }), { alignment: AlignmentType.CENTER })],
-          }),
-          new TableCell({
-            width: { size: CONTENT - 480, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(C.border, 2), left: nb(), right: nb() },
-            shading: { fill: 'FFFDF0', type: ShadingType.CLEAR },
-            margins: { top: 80, bottom: 100, left: 160, right: 0 },
-            children: [
-              p(b('Your text', { size: 16, color: C.grey })), gap(40),
-              p(t(m.query_text || '', { size: 20, italics: true })),
-            ],
-          }),
-        ]})]
-      }),
-      new Table({
-        width: { size: CONTENT, type: WidthType.DXA },
-        columnWidths: [480, CONTENT - 480],
-        rows: [new TableRow({ children: [
-          new TableCell({
-            width: { size: 480, type: WidthType.DXA }, borders: noB(),
-            margins: { top: 60, bottom: 60, left: 0, right: 0 },
-            children: [p(b(pct(m.match_percentage), { size: 18, color: bg }), { alignment: AlignmentType.CENTER })],
-          }),
-          new TableCell({
-            width: { size: CONTENT - 480, type: WidthType.DXA },
-            borders: { top: nb(), bottom: sb(bg, 6), left: sb(bg, 8), right: nb() },
-            shading: { fill: 'FEF0F0', type: ShadingType.CLEAR },
-            margins: { top: 80, bottom: 100, left: 160, right: 0 },
-            children: [
-              p(b('Matched source', { size: 16, color: bg })), gap(40),
-              p(t(m.db_text || '', { size: 20 })),
-              ...(m.exact_copied_phrases?.length > 0 ? [
-                gap(80),
-                p(b('Exact phrases:', { size: 16, color: C.red })),
-                ...m.exact_copied_phrases.map(ph =>
-                  p(t(`"${ph}"`, { size: 18, bold: true, color: C.red }))
-                ),
-              ] : []),
-            ],
-          }),
-        ]})]
-      }),
-      gap(220),
-    )
+  const filteredMatches = src.matches.filter(m => {
+    if (filter === 'exact')      return m.detection !== 'paraphrase'
+    if (filter === 'paraphrase') return m.detection === 'paraphrase'
+    return true
   })
 
-  return {
-    properties: pageProps(),
-    headers: { default: makeHeader(label, fileName) },
-    footers: { default: makeFooter(label, submissionId) },
-    children,
+  let y = MT + 8
+
+  // ── Source header ────────────────────────────────────────────────────────
+  const isExact  = src.has_exact_copies
+  const hBgCol   = isExact ? C.redBg : C.purpleBg
+  const hCol     = isExact ? C.red   : C.purple
+  const hLabel   = isExact ? 'EXACT COPY' : 'PARAPHRASE'
+
+  fillRect(doc, ML, y, CW, 24, hBgCol)
+  doc.setDrawColor(...hCol)
+  doc.setLineWidth(0.4)
+  doc.rect(ML, y, CW, 24)
+
+  // Left: source number badge
+  fillRect(doc, ML, y, 12, 24, hCol)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...C.white)
+  doc.text(String(srcIndex + 1), ML + 6, y + 14, { align: 'center' })
+
+  // Detection label
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...hCol)
+  doc.text(hLabel, ML + 16, y + 5.5)
+
+  // Title
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(...C.black)
+  const titleLines = wrap(doc, src.title || src.arxiv_id, CW - 60)
+  doc.text(titleLines[0], ML + 16, y + 11)
+
+  // arXiv link
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...C.blue)
+  doc.text(`https://arxiv.org/abs/${src.arxiv_id}`, ML + 16, y + 17)
+  doc.link(ML + 16, y + 13, 80, 5, { url: `https://arxiv.org/abs/${src.arxiv_id}` })
+
+  // Right: similarity
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(18)
+  doc.setTextColor(...scoreColor(src.average_similarity_percent))
+  doc.text(`${src.average_similarity_percent.toFixed(1)}%`, PW - MR - 2, y + 14, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...C.grey)
+  doc.text(`${src.match_count} match${src.match_count !== 1 ? 'es' : ''}`, PW - MR - 2, y + 20, { align: 'right' })
+
+  y += 30
+
+  if (filteredMatches.length === 0) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(9)
+    doc.setTextColor(...C.grey)
+    doc.text(`No ${filter} matches for this source.`, ML, y)
+    return
   }
+
+  // ── Match pairs ──────────────────────────────────────────────────────────
+  filteredMatches.forEach((m, mi) => {
+    const isParaphrase = m.detection === 'paraphrase'
+    const mCol  = isParaphrase ? C.purple : C.red
+    const mBg   = isParaphrase ? C.purpleBg : C.redBg
+    const mLabel = isParaphrase ? '⟳ Paraphrase' : '≡ Exact match'
+
+    // Estimate block height to check overflow
+    const yourLines = wrap(doc, m.query_text || '', CW - 8)
+    const dbLines   = m.db_text ? wrap(doc, m.db_text, CW - 8) : []
+    const phLines   = (m.exact_copied_phrases ?? []).flatMap(ph => wrap(doc, `"${ph}"`, CW - 12))
+    const estH = 10 + yourLines.length * 4.2 + (dbLines.length ? 6 + dbLines.length * 4.2 : 0) + (phLines.length ? 5 + phLines.length * 4 : 0) + 10
+
+    if (y + estH > PH - 16) {
+      addPage(doc)
+      pageHeader(doc, fileName, pageNum, totalPages)
+      pageFooter(doc, submissionId, date)
+      y = MT + 8
+    }
+
+    // Match header row
+    fillRect(doc, ML, y, CW, 6.5, mBg)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...mCol)
+    doc.text(`${mi + 1}.  ${mLabel}`, ML + 3, y + 4.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...C.grey)
+    doc.text(`${m.match_percentage.toFixed(1)}% similarity`, PW - MR - 2, y + 4.5, { align: 'right' })
+    y += 7.5
+
+    // Progress bar
+    const barW = CW
+    fillRect(doc, ML, y, barW, 1.5, C.lightGrey)
+    fillRect(doc, ML, y, barW * m.match_percentage / 100, 1.5, mCol)
+    y += 4
+
+    // ── Your text ──────────────────────────────────────────────────────────
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C.grey)
+    doc.text('YOUR TEXT', ML, y)
+    y += 3.5
+
+    const yourH = yourLines.length * 4.2 + 5
+    fillRect(doc, ML, y, CW, yourH, C.bgGrey)
+    doc.setDrawColor(...C.lightGrey)
+    doc.setLineWidth(0.2)
+    doc.rect(ML, y, CW, yourH)
+
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8)
+    doc.setTextColor(...C.black)
+    yourLines.forEach((line, li) => doc.text(line, ML + 3, y + 4 + li * 4.2))
+    y += yourH + 2
+
+    // ── Matched source text ────────────────────────────────────────────────
+    if (dbLines.length) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C.grey)
+      doc.text('MATCHED SOURCE TEXT', ML, y)
+      y += 3.5
+
+      const dbH = dbLines.length * 4.2 + 5
+      fillRect(doc, ML, y, 2, dbH, mCol)
+      fillRect(doc, ML + 2, y, CW - 2, dbH, mBg)
+      doc.setDrawColor(...C.lightGrey)
+      doc.setLineWidth(0.2)
+      doc.rect(ML + 2, y, CW - 2, dbH)
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(50, 50, 60)
+      dbLines.forEach((line, li) => doc.text(line, ML + 5, y + 4 + li * 4.2))
+      y += dbH + 2
+    }
+
+    // ── Exact phrases ──────────────────────────────────────────────────────
+    if (phLines.length) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...C.red)
+      doc.text('EXACT COPIED PHRASES:', ML, y)
+      y += 3.5
+      doc.setFont('helvetica', 'italic')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...C.red)
+      phLines.forEach(line => { doc.text(line, ML + 3, y); y += 4 })
+      y += 2
+    }
+
+    y += 4
+    hLine(doc, y - 1, C.lightGrey, 0.3)
+    y += 4
+  })
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function generateReport(data: EngineReport, originalFileName: string): Promise<void> {
-  // Normalise: fill in missing file_name so all section functions can rely on it
-  const normalizedData: EngineReport = { ...data, file_name: data.file_name ?? originalFileName }
-  const submissionId = `sentinel:${Date.now()}`
-  const submDate     = new Date().toLocaleString('en-GB')
-  const totalPages   = 3 + data.sources.length
-
-  const doc = new Document({
-    styles: {
-      default: { document: { run: { font: 'Arial', size: 20, color: C.black } } },
+export async function generatePdfReport(
+  data: EngineReport,
+  originalFileName: string,
+  filter: ReportFilter = 'all',
+): Promise<void> {
+  // Guard against undefined/null fields from the API to prevent PDF render crashes
+  const safeData: EngineReport = {
+    ...data,
+    global_plagiarism_score_percent: data.global_plagiarism_score_percent ?? 0,
+    total_reported_sources: data.total_reported_sources ?? 0,
+    total_suspicious_sources: data.total_suspicious_sources ?? 0,
+    document_stats: {
+      total_words: data.document_stats?.total_words ?? 0,
+      total_chunks_analyzed: data.document_stats?.total_chunks_analyzed ?? 0,
     },
-    sections: [
-      coverSection(normalizedData, submissionId, submDate, totalPages),
-      overviewSection(normalizedData, submissionId, totalPages),
-      topSourcesSection(normalizedData, submissionId, totalPages),
-      ...( normalizedData.sources ?? []).map((src, i) =>
-        detailSection(src, i, 4 + i, totalPages, normalizedData.file_name!, submissionId)
-      ),
-    ],
+    sources: data.sources ?? [],
+  }
+
+  const fileName     = safeData.file_name ?? originalFileName
+  const submissionId = `sentinel:${Date.now()}`
+  const date         = new Date().toLocaleString('en-GB')
+  const baseName     = fileName.replace(/\.[^/.]+$/, '')
+  const suffix       = filter !== 'all' ? `_${filter}` : ''
+  
+  // Calculate total pages: Cover page + one page per source
+  const totalPages   = 1 + (safeData.sources.length)
+
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
+  
+  // Initial background fill
+  fillRect(doc, 0, 0, PW, PH, C.white)
+
+  // Render the Cover Page (Page 1)
+  renderCover(doc, safeData, submissionId, date, filter, totalPages)
+
+  // Render detail pages for each source
+  safeData.sources.forEach((src, i) => {
+    addPage(doc)
+    renderSource(
+      doc, 
+      src, 
+      i, 
+      i + 2, 
+      totalPages, 
+      fileName, 
+      submissionId, 
+      date, 
+      filter
+    )
   })
 
-  const blob     = await Packer.toBlob(doc)
-  const baseName = (normalizedData.file_name ?? originalFileName).replace(/\.[^/.]+$/, '')
-  saveAs(blob, `plagiarism_report_${baseName}.docx`)
+  doc.save(`plagiarism_report_${baseName}${suffix}.pdf`)
 }

@@ -1,26 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from sqlalchemy.orm import Session, joinedload
-import importlib.util
-import traceback
-import logging
-import shutil
-import sys
-import os
-import time
-from pathlib import Path
+from __future__ import annotations
 
-from schemas.documents import DocumentResponse
-from models import Document, DocumentStatus, PlagiarismReport
+import logging
+import os
+import shutil
+import time
+import traceback
+from typing import List
+
+import httpx
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.orm import Session, joinedload
+
 from database import get_db
+from models import Document, DocumentStatus, PlagiarismReport
+from schemas.documents import DocumentResponse
+from routes.auth import get_current_user
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = os.getenv("ML_SHARED_UPLOAD_DIR", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 
-# ── Helper: fetch document + report in one JOIN ───────────────────────────────
+
+# ── Helper ────────────────────────────────────────────────────────────────────
 
 def _get_doc_with_report(document_id: int, db: Session) -> Document | None:
     return (
@@ -34,46 +39,50 @@ def _get_doc_with_report(document_id: int, db: Session) -> Document | None:
     )
 
 
-# ── Engine loader ─────────────────────────────────────────────────────────────
+# ── ML service caller ─────────────────────────────────────────────────────────
 
-_engine_instance = None
+def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
+    """Call the ML microservice to run plagiarism analysis."""
+    payload = {
+        "file_path": file_path,
+        "arxiv_id": arxiv_id,
+        "threshold": 0.75,
+        "top_k": 5,
+        "paraphrase_mode": False,
+    }
 
+    try:
+        with httpx.Client(timeout=180.0) as client:
+            response = client.post(f"{ML_SERVICE_URL}/analyze", json=payload)
 
-def _load_engine_class():
-    this_dir  = Path(__file__).resolve().parent
-    engine_py = this_dir.parent / "core" / "antiplagiator" / "engine.py"
+        if response.status_code == 503:
+            raise HTTPException(
+                status_code=503,
+                detail="ML service is not ready yet (still loading model/artifacts). Try again shortly.",
+            )
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=500,
+                detail="ML service could not find the uploaded file. Check shared volume.",
+            )
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=500,
+                detail=f"ML service error {response.status_code}: {response.text}",
+            )
 
-    if not engine_py.exists():
-        raise FileNotFoundError(f"engine.py not found at: {engine_py}")
+        return response.json()  # {"result": {...}, "processing_time_seconds": 12.3}
 
-    MODULE_NAME = "antiplagiator_engine_module"
-
-    spec   = importlib.util.spec_from_file_location(MODULE_NAME, engine_py)
-    module = importlib.util.module_from_spec(spec)
-
-    # CRITICAL: register in sys.modules BEFORE exec_module.
-    # @dataclass (and other decorators) call sys.modules.get(cls.__module__)
-    # to resolve the module namespace. Without this registration that lookup
-    # returns None and crashes with "NoneType has no attribute __dict__".
-    sys.modules[MODULE_NAME] = module
-
-    spec.loader.exec_module(module)
-
-    cls = getattr(module, "AntiplagiarismEngine", None)
-    if cls is None:
-        raise ImportError("AntiplagiarismEngine class not found in engine.py")
-    return cls
-
-
-def get_engine():
-    global _engine_instance
-    if _engine_instance is None:
-        AntiplagiarismEngine = _load_engine_class()
-        _engine_instance = AntiplagiarismEngine(
-            artifacts_dir=Path("core/antiplagiator/artifacts"),
-            data_dir=Path("core/antiplagiator/data/processed"),
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Cannot reach ML service at {ML_SERVICE_URL}. Is it running?",
         )
-    return _engine_instance
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="ML service timed out. The document may be too large.",
+        )
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -125,26 +134,25 @@ def analyze_document(
     db.commit()
 
     try:
-        logger.info("Loading engine...")
-        engine = get_engine()
-        logger.info("Engine ready. Analyzing: %s", doc.file_path)
+        logger.info("Sending to ML service: %s", doc.file_path)
 
-        start  = time.perf_counter()
-        result = engine.analyze_document(
-            Path(doc.file_path),
-            threshold=0.75,
-            top_k=5,
-        )
-        elapsed = time.perf_counter() - start
-        logger.info("Analysis complete in %.2fs", elapsed)
+        t0 = time.perf_counter()
+        ml_response = _call_ml_service(file_path=doc.file_path)
+        elapsed = time.perf_counter() - t0
+
+        result = ml_response["result"]
+        processing_time = ml_response.get("processing_time_seconds", elapsed)
+
+        logger.info("ML service done in %.2fs — score: %.1f%%",
+                    elapsed, result.get("global_plagiarism_score_percent", 0))
 
         if "error" in result:
-            logger.error("Engine returned error: %s", result["error"])
+            logger.error("ML service returned error: %s", result["error"])
             doc.status = DocumentStatus.FAILED
             db.commit()
             raise HTTPException(status_code=422, detail=result["error"])
 
-        # Save report
+        # Save report to DB (same as before)
         report = PlagiarismReport(
             document_id=document_id,
             global_score=result.get("global_plagiarism_score_percent", 0.0),
@@ -152,11 +160,11 @@ def analyze_document(
             ai_model_used=result.get("analysis_config", {}).get("embedding_model", "unknown"),
             faiss_index_version="v1.0",
             similarity_threshold=0.75,
-            processing_time_seconds=round(elapsed, 3),
+            processing_time_seconds=round(processing_time, 3),
         )
         db.add(report)
         doc.word_count = result.get("document_stats", {}).get("total_words")
-        doc.status     = DocumentStatus.COMPLETED
+        doc.status = DocumentStatus.COMPLETED
         db.commit()
 
         return _get_doc_with_report(document_id, db)
@@ -165,7 +173,7 @@ def analyze_document(
         raise
     except Exception as exc:
         full_tb = traceback.format_exc()
-        logger.error("Engine error:\n%s", full_tb)
+        logger.error("Unexpected error:\n%s", full_tb)
         doc.status = DocumentStatus.FAILED
         db.commit()
         raise HTTPException(
@@ -173,6 +181,23 @@ def analyze_document(
             detail=f"{str(exc)}\n\nTraceback:\n{full_tb}",
         )
 
+@router.get("/", response_model=List[DocumentResponse])
+def get_user_documents(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return all non-deleted documents (with their reports) for the logged-in user."""
+    docs = (
+        db.query(Document)
+        .options(joinedload(Document.report))
+        .filter(
+            Document.user_id == current_user.id,
+            Document.is_deleted == False,  # noqa: E712
+        )
+        .order_by(Document.uploaded_at.desc())
+        .all()
+    )
+    return docs
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: int, db: Session = Depends(get_db)):

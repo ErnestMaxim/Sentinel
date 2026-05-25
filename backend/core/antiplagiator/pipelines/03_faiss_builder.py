@@ -1,31 +1,3 @@
-"""
-03_faiss_builder.py — FAISS index builder (v3, memmap + streaming).
-
-Fixes for CUDA OOM on 15M+ vector corpus:
-
-  FIX 1 — encode_to_memmap (v2)
-     Each encode batch is written to disk immediately and freed from GPU.
-     GPU never holds more than one batch (~400 MB) at a time.
-
-  FIX 2 — streaming JSONL read (v3)
-     build_and_save no longer loads all texts into a Python list first.
-     Previously: texts = [r["text"] for r in records]  <- 20-30 GB RAM for 15M chunks
-     Now: texts are read from the JSONL file in streaming batches during encoding.
-     RAM usage for text strings stays flat regardless of corpus size.
-
-  FIX 3 — two-pass JSONL read
-     Pass 1: read metadata only (no text) — fast, low memory
-     Pass 2: read text in streaming batches during encoding
-
-Usage (Colab A100):
-  python 03_faiss_builder.py \\
-      --input chunked_database.jsonl \\
-      --artifacts-dir artifacts/ \\
-      --device cuda \\
-      --index-type pq \\
-      --nlist 4096 \\
-      --nprobe 64
-"""
 from __future__ import annotations
 
 import argparse
@@ -43,7 +15,7 @@ from sentence_transformers import SentenceTransformer
 LOGGER = logging.getLogger("faiss_builder")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
-MODEL_NAME   = "BAAI/bge-m3"
+MODEL_NAME   = "BAAI/bge-base-en-v1.5"
 NLIST        = 4096
 NPROBE       = 64
 ENCODE_BATCH = 512    # texts per GPU forward pass

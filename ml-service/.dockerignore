@@ -1,0 +1,16 @@
+# Exclude large artifact files — these live on Docker volume, NOT in the image
+antiplagiator/artifacts/
+antiplagiator/data/raw/
+antiplagiator/data/processed/
+ 
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+ 
+# Dev files
+.env
+.git/
+*.md

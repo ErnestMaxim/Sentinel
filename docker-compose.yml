@@ -1,0 +1,59 @@
+services:
+
+  # ── API Gateway (FastAPI backend) ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      ML_SERVICE_URL: http://ml-service:8001
+      ML_SHARED_UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads_data:/data/uploads
+    depends_on:
+      ml-service:
+        condition: service_started
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # ── ML Microservice ───────────────────────────────────────────────────────
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./ml-service/.env
+    environment:
+      ARTIFACTS_DIR: /data/artifacts
+      DATA_DIR: /data/processed
+    volumes:
+      - ml_artifacts:/data/artifacts
+      - ml_hf_cache:/data/hf_cache
+      - uploads_data:/data/uploads
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  ml_artifacts:   # FAISS indexes + classifier (~10GB, downloaded once from HF)
+  ml_hf_cache:    # BAAI/bge-base-en-v1.5 model weights (~500MB)
+  uploads_data:   # shared between backend (write) and ml-service (read)
+
+# ── Network ───────────────────────────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge

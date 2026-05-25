@@ -1,7 +1,9 @@
 import os
+import secrets
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
@@ -11,7 +13,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 from schemas.users import UserResponse
-from utils.security import create_access_token, decode_access_token, verify_password
+from utils.email import send_password_reset_email
+from utils.security import create_access_token, decode_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -26,6 +29,9 @@ GOOGLE_AUTH_URL  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO  = "https://www.googleapis.com/oauth2/v3/userinfo"
 
+# Token TTL
+RESET_TOKEN_EXPIRE_HOURS = 1
+
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +43,15 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
 
 
 # ── Email / password login ────────────────────────────────────────────────────
@@ -57,6 +72,86 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token(subject=user.id)
     return TokenResponse(access_token=token)
+
+
+# ── Forgot password ───────────────────────────────────────────────────────────
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Always returns 200 — never reveal whether an email is registered.
+    The reset email is sent in a background task so the response is fast.
+    """
+    user = db.query(User).filter(
+        User.email == payload.email,
+        User.is_deleted == False,  # noqa: E712
+    ).first()
+
+    if user:
+        # Generate a cryptographically secure URL-safe token
+        token = secrets.token_urlsafe(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=RESET_TOKEN_EXPIRE_HOURS)
+
+        user.reset_token = token
+        user.reset_token_expires_at = expires_at
+        db.commit()
+
+        background_tasks.add_task(send_password_reset_email, user.email, token)
+
+    # Always return the same message — no user enumeration
+    return {"detail": "If that email is registered, a reset link has been sent."}
+
+
+# ── Reset password ────────────────────────────────────────────────────────────
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Validate the reset token and set the new password.
+    Token is single-use — cleared after a successful reset.
+    """
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password must be at least 8 characters",
+        )
+
+    user = db.query(User).filter(
+        User.reset_token == payload.token,
+        User.is_deleted == False,  # noqa: E712
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset link",
+        )
+
+    # Check expiry — compare as UTC-aware datetimes
+    now = datetime.now(timezone.utc)
+    expires_at = user.reset_token_expires_at
+
+    # Handle naive datetimes stored without tz info (treat as UTC)
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at is None or now > expires_at:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset link",
+        )
+
+    # Update password and invalidate the token
+    user.hashed_password        = hash_password(payload.new_password)
+    user.reset_token            = None
+    user.reset_token_expires_at = None
+    db.commit()
+
+    return {"detail": "Password updated successfully."}
 
 
 # ── Current user dependency ───────────────────────────────────────────────────
@@ -130,12 +225,9 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         )
 
     if token_resp.status_code != 200:
-        # ADD THIS LOGGING LINE:
-        print(f"GOOGLE TOKEN ERROR: {token_resp.status_code} - {token_resp.text}")
-        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to fetch token: {token_resp.text}", # Temporarily show the detail
+            detail=f"Failed to fetch token: {token_resp.text}",
         )
 
     google_access_token = token_resp.json().get("access_token")
@@ -159,7 +251,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         )
 
     info       = userinfo_resp.json()
-    google_id  = info.get("sub")          # Google's unique user ID
+    google_id  = info.get("sub")
     email      = info.get("email", "")
     first_name = info.get("given_name", "")
     last_name  = info.get("family_name", "")
@@ -174,7 +266,6 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.google_id == google_id).first()
 
     if not user:
-        # Check if an email-based account already exists → link it
         user = db.query(User).filter(
             User.email == email,
             User.is_deleted == False,  # noqa: E712
@@ -183,7 +274,6 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         if user:
             user.google_id = google_id
         else:
-            # Brand-new user — no password needed
             user = User(
                 email=email,
                 first_name=first_name,
@@ -196,6 +286,6 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
 
-    # 4. Issue our own JWT and send the user back to the frontend
+    # 4. Issue our own JWT and redirect to the frontend
     token = create_access_token(subject=user.id)
     return RedirectResponse(url=f"{FRONTEND_URL}/auth/callback?token={token}")

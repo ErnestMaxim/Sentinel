@@ -1,0 +1,16 @@
+# Exclude the entire antiplagiator core (now lives in ml-service)
+core/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Dev files
+.env
+.git/
+*.md
+
+# Uploads (mounted as volume)
+uploads/

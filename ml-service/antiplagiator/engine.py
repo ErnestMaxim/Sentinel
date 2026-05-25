@@ -447,7 +447,7 @@ class AntiplagiarismEngine:
                     else categories
                 )
                 for cat in cats_to_count:
-                    category_votes[cat] += confidence
+                    category_votes[str(cat)] += confidence
 
         avg_confidence = total_confidence / len(sample_vectors)
 
@@ -458,9 +458,10 @@ class AntiplagiarismEngine:
             )
 
         max_cats = 1 if avg_confidence > HIGH_CONFIDENCE_THRESHOLD else self.routing_top_k
-        top_categories = sorted(
+        top_categories = [str(c) for c in sorted(
             category_votes, key=category_votes.__getitem__, reverse=True
-        )[:max_cats]
+        )[:max_cats]]
+        top_categories = [str(c) for c in top_categories]
 
         strategy = (
             "per_category"
@@ -783,10 +784,9 @@ class AntiplagiarismEngine:
         top_k: int,
         allowed_categories: list[str] | None,
     ) -> tuple[np.ndarray, np.ndarray]:
+        LOGGER.info(">>> _search_global called — filter DISABLED")
         similarities, indices = self.index.search(query_vectors, k=top_k)
-        if allowed_categories is None:
-            return similarities, indices
-        return self._filter_by_category(similarities, indices, top_k, allowed_categories)
+        return similarities, indices
 
     def _filter_by_category(
         self,
@@ -796,6 +796,20 @@ class AntiplagiarismEngine:
         allowed_categories: list[str],
     ) -> tuple[np.ndarray, np.ndarray]:
         allowed = _expand_category_set(allowed_categories)
+        
+        # ── DEFINITIVE DEBUG — remove after fix confirmed ──
+        LOGGER.info(">>> FILTER CALLED: allowed_categories=%s  expanded=%s", allowed_categories, allowed)
+        
+        # Sample what categories the top FAISS hits actually have
+        sample_db_cats = set()
+        for col in range(min(5, indices.shape[1])):
+            db_idx = int(indices[0, col])
+            if 0 <= db_idx < len(self.metadata):
+                sample_db_cats.add(self.metadata[db_idx].get("top_category", "?"))
+        LOGGER.info(">>> TOP FAISS HIT CATEGORIES: %s", sample_db_cats)
+        LOGGER.info(">>> INTERSECTION TEST: %s", _expand_category_set(list(sample_db_cats)) & allowed)
+        # ──────────────────────────────────────────────────
+
         filtered_sim = np.full_like(similarities, -1.0)
         filtered_idx = np.full_like(indices, -1)
 
@@ -805,7 +819,8 @@ class AntiplagiarismEngine:
                 db_idx = int(indices[row, col])
                 if db_idx < 0 or db_idx >= len(self.metadata):
                     continue
-                if self.metadata[db_idx].get("top_category", "") in allowed:
+                meta_cat = self.metadata[db_idx].get("top_category", "")
+                if _expand_category_set([meta_cat]) & allowed:
                     filtered_sim[row, write_pos] = similarities[row, col]
                     filtered_idx[row, write_pos] = db_idx
                     write_pos += 1
@@ -935,6 +950,7 @@ def _expand_category_set(categories: list[str]) -> set[str]:
     """Accept both code ('cs') and name ('Computer Science') forms."""
     expanded = set()
     for cat in categories:
+        cat = str(cat)
         expanded.add(cat)
         expanded.add(CATEGORY_NAME_TO_CODE.get(cat, cat))
         expanded.add(CATEGORY_CODE_TO_NAME.get(cat, cat))

@@ -182,6 +182,12 @@ export default function SigninPage() {
             }}
           </form.Field>
 
+          <div style={{ textAlign: 'right', marginTop: '-4px' }}>
+            <Link to="/forgot-password" className={styles.forgotLink}>
+              Forgot password?
+            </Link>
+          </div>
+
           <form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>
             {([canSubmit, isSubmitting]) => (
               <button type="submit" disabled={!canSubmit} className={styles.submitButton}>
