@@ -39,30 +39,18 @@ class TextExtractor:
         chunk_size: int = 100,
         overlap: int = 30,
         arxiv_id: str | None = None,
-    ) -> list[str]:
-        """
-        Extract normalised text from file_path and split into word chunks.
-
-        Priority order:
-          1. arXiv LaTeX source (if arxiv_id is given)
-          2. Local .tex file
-          3. Local .pdf file (PyMuPDF)
-          4. Raw text fallback
-
-        Returns a list of chunk strings, each containing chunk_size words
-        (with overlap words shared between consecutive chunks).
-        Empty if no usable text could be extracted.
-        """
+    ) -> tuple[list[str], str]:          # ← change return type
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         raw_text = self._extract_raw_text(file_path, arxiv_id)
         if not raw_text:
             LOGGER.warning("Could not extract any text from %s", file_path)
-            return []
+            return [], ""                # ← return empty string too
 
         normalized = normalize_text_for_fingerprint(raw_text)
-        return self._chunk_words(normalized, chunk_size, overlap, min_words=20)
+        chunks = self._chunk_words(normalized, chunk_size, overlap, min_words=20)
+        return chunks, normalized        # ← return both
 
     # ------------------------------------------------------------------
     # LaTeX helpers

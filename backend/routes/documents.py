@@ -46,7 +46,7 @@ def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
     payload = {
         "file_path": file_path,
         "arxiv_id": arxiv_id,
-        "threshold": 0.75,
+        "threshold": 0.75,   # PQ scores are 0.14-0.29 for exact matches
         "top_k": 5,
         "paraphrase_mode": False,
     }

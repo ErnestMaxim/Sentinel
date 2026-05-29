@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
         device=DEVICE,
         max_sources=10,
         max_matches_per_source=5,
-        use_category_routing=True,
+        use_category_routing=False,
         use_per_category_indexes=False,
     )
 
@@ -208,4 +208,46 @@ def debug_classifier():
     return {
         "classes": list(_engine.clf.classes_),
         "n_classes": len(_engine.clf.classes_),
+    }
+
+@app.post("/debug/scores")
+def debug_scores(req: AnalyzeRequest):
+    """Show raw FAISS scores for the first chunk — helps tune threshold."""
+    if _engine is None or not _engine.is_ready:
+        raise HTTPException(status_code=503, detail="Engine not ready")
+    
+    file_path = Path(req.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
+
+    chunks = _engine._extractor.read_and_chunk(file_path)
+    if not chunks:
+        return {"error": "No chunks extracted"}
+
+    # Encode just the first chunk and search
+    import numpy as np
+    first_chunk = chunks[0]
+    vec = _engine._model.encode(
+        [first_chunk],
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+    ).astype("float32")
+
+    scores, indices = _engine.index.search(vec, 10)
+    
+    results = []
+    for score, idx in zip(scores[0], indices[0]):
+        if idx < 0:
+            continue
+        meta = _engine.metadata[idx] if idx < len(_engine.metadata) else {}
+        results.append({
+            "score": round(float(score), 4),
+            "arxiv_id": meta.get("arxiv_id"),
+            "chunk_id": meta.get("chunk_id"),
+            "top_category": meta.get("top_category"),
+        })
+
+    return {
+        "first_chunk_preview": first_chunk[:200],
+        "top_10_raw_scores": results,
     }

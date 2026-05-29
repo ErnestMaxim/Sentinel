@@ -24,7 +24,7 @@ def load_global_index(
 
     Raises FileNotFoundError if either file is missing.
     """
-    index_path    = artifacts_dir / "faiss_document_index.bin"
+    index_path = artifacts_dir / "faiss_document_index_ondisk.bin"
     metadata_path = artifacts_dir / "faiss_metadata.pkl"
 
     if not index_path.exists():
@@ -33,7 +33,7 @@ def load_global_index(
         raise FileNotFoundError(f"FAISS metadata not found: {metadata_path}")
 
     LOGGER.info("Loading global FAISS index from %s ...", index_path)
-    index = faiss.read_index(str(index_path))
+    index = faiss.read_index(str(index_path), faiss.IO_FLAG_MMAP)
     if hasattr(index, "nprobe"):
         index.nprobe = nprobe
 

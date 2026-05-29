@@ -57,7 +57,7 @@ MIN_EXACT_PHRASE_CHARS = 50
 
 # Paraphrase mode — FAISS retrieves at this lower threshold to cast a wider net.
 # The cross-encoder then filters out false positives.
-PARAPHRASE_RETRIEVAL_THRESHOLD = 0.70
+PARAPHRASE_RETRIEVAL_THRESHOLD = 0.08
 
 # Cross-encoder logit above which a pair is considered a paraphrase.
 # 0.0 = sigmoid midpoint ("more likely relevant than not").
@@ -105,7 +105,9 @@ class ChunkMatch:
     exact_copied_phrases: list[str]
     db_source_type: str
     severity: str
-    detection: str = "exact"      # "exact" | "paraphrase"
+    detection: str = "exact"
+    query_char_start:     int = -1    # ← add
+    query_char_end:       int = -1 
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -119,6 +121,8 @@ class ChunkMatch:
             "db_source_type":       self.db_source_type,
             "severity":             self.severity,
             "detection":            self.detection,
+            "query_char_start": self.query_char_start,
+            "query_char_end":   self.query_char_end,
         }
 
 
@@ -857,11 +861,16 @@ class AntiplagiarismEngine:
         self,
         chunk_idx: int,
         query_text: str,
+        full_text: str,  
         meta: dict,
         db_text: str,
         similarity: float,
         detection: str = "exact",
     ) -> ChunkMatch:
+        
+        char_start = full_text.find(query_text)
+        char_end   = char_start + len(query_text) if char_start != -1 else -1
+
         return ChunkMatch(
             query_chunk_idx=chunk_idx,
             query_text=query_text,
@@ -873,6 +882,8 @@ class AntiplagiarismEngine:
             db_source_type=meta.get("source_type", "unknown"),
             severity=_severity(similarity),
             detection=detection,
+            query_char_start=char_start,
+            query_char_end=char_end,
         )
 
     def _find_exact_phrases(

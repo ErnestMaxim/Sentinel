@@ -1,11 +1,13 @@
 import { useState, useRef, useCallback } from 'react'
 import Navbar from '../../components/shared/navbar/Navbar'
 import styles from './Analyzer.module.css'
-import { generatePdfReport, type ReportFilter } from '../../utils/generateReport'
+import { generatePdfReport, type ReportFilter } from '../../utils/report'
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Stage = 'idle' | 'uploading' | 'analyzing' | 'done' | 'error'
+
 
 interface EngineMatch {
   query_chunk_idx:      number
@@ -122,6 +124,45 @@ export default function AnalyzerPage() {
   const [downloading,   setDownloading]   = useState(false)
   const [reportFilter,  setReportFilter]  = useState<ReportFilter>('all')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const MOCK_REPORT = {
+    file_name: 'test.pdf',
+    global_plagiarism_score_percent: 34.5,
+    total_reported_sources: 1,
+    total_suspicious_sources: 1,
+    full_text: `We propose a new simple network architecture the Transformer based solely on attention mechanisms dispensing with recurrence and convolutions entirely. The model architecture follows an encoder decoder structure using stacked self attention and point wise fully connected layers for both the encoder and the decoder. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. We achieve a new state of the art on English to German translation improving over the existing best results by over two points. On English to French translation we train a single model and achieve a new single model state of the art score outperforming all of the previously published ensemble models at a fraction of the training cost. The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The attention mechanism allows modeling of dependencies without regard to their distance in the input or output sequences. We propose the Transformer a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output.`,
+    document_stats: { total_words: 4200, total_chunks_analyzed: 42 },
+    analysis_config: {
+      threshold_used: 0.8,
+      embedding_model: 'test',
+      category_routing: { enabled: false, routed_to: null },
+    },
+    sources: [
+      {
+        arxiv_id: '2301.00001',
+        title: 'Attention Is All You Need',
+        match_count: 1,
+        average_similarity_percent: 72.4,
+        has_exact_copies: true,
+        matches: [
+          {
+            query_chunk_idx: 0,
+            query_text: 'We propose a new simple network architecture the Transformer based solely on attention mechanisms dispensing with recurrence and convolutions entirely.',
+            query_char_start: 0,
+            query_char_end: 152,
+            db_chunk_idx: 0,
+            db_text: 'We propose a new simple network architecture, the Transformer, based solely on attention mechanisms.',
+            cosine_similarity: 0.94,
+            match_percentage: 72.4,
+            exact_copied_phrases: ['the Transformer'],
+            db_source_type: 'arxiv',
+            detection: 'exact' as const,
+          },
+        ],
+      },
+    ],
+  }
+
 
   const isRunning = stage === 'uploading' || stage === 'analyzing'
 
@@ -400,6 +441,10 @@ export default function AnalyzerPage() {
                   )}
                 </div>
               )}
+
+              <button onClick={() => generatePdfReport(MOCK_REPORT, 'test.pdf', 'all')}>
+                Test PDF
+              </button>
 
               {/* Pipeline progress */}
               {isRunning && (

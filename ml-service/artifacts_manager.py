@@ -72,6 +72,7 @@ def ensure_artifacts(
         local_dir=str(artifacts_dir),
         token=hf_token,
         ignore_patterns=[".gitattributes", "*.git*"],
+        local_dir_use_symlinks=False,   # ← add this
     )
 
     # Verify after download
