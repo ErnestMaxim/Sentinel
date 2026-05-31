@@ -1,0 +1,98 @@
+/* PdfViewer.module.css */
+
+.viewer {
+  background: #d1d5db;
+  min-height: 300px;
+  border-radius: 0 0 10px 10px;
+}
+
+/* ── Loading / error ── */
+.loadingBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 24px;
+  font-size: 13px;
+  color: #6b7280;
+  background: rgba(255,255,255,0.85);
+}
+
+.spinner {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #dc2626;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.errorBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px;
+  padding: 14px 18px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 13px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+/* ── Pages wrapper ── */
+.pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 20px 32px;
+}
+
+/* ── Single page shell (stacking context) ── */
+.pageShell {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 3px 16px rgba(0,0,0,0.22);
+  /* width/height set by JS */
+}
+
+/* ── PDF canvas (bottom — the actual PDF rendering) ── */
+.pdfCanvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ── Highlight canvas (middle — red highlight boxes) ── */
+.hlCanvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;   /* receives click events */
+  cursor: pointer;
+}
+
+/* ── Text layer (top — transparent text for copy/select) ── */
+.textLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  pointer-events: none;   /* let clicks through to hlCanvas */
+  user-select: text;
+  line-height: 1;
+}
+
+/* PDF.js inserts position-absolute spans here */
+.textLayer span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  pointer-events: none;
+}

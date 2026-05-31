@@ -1,0 +1,67 @@
+/* Shared shell for all auth pages (signin, signup, forgot/reset password) */
+
+.page {
+  --panel:        rgba(14, 18, 30, 0);
+  --panel-border: rgba(255, 255, 255, 0.16);
+  --text-main:    #f4f7ff;
+  --text-muted:   #b8c1d9;
+  --field-bg:     rgba(255, 255, 255, 0.07);
+  --field-border: rgba(255, 255, 255, 0.16);
+  --field-focus:  rgba(255, 233, 111, 0.75);
+  --btn-light:    #f4f6fb;
+  --btn-dark:     #131723;
+  --danger:       #ff7b8d;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 680px 1fr;
+  align-items: stretch;
+  justify-items: start;
+  padding: 12px 20px 12px 12px;
+  font-family: 'Sora', 'Segoe UI', sans-serif;
+}
+
+.bgVideo {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0; z-index: -1;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.52), rgba(0,0,0,0.78));
+}
+
+.logoStage {
+  grid-column: 2;
+  align-self: center;
+  justify-self: center;
+  width: 100%; height: 100%;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: translateX(-96px);
+}
+
+.logoMark {
+  width: min(28vw, 380px);
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  opacity: 0.9;
+  filter: drop-shadow(0 16px 36px rgba(0,0,0,0.4))
+          drop-shadow(0 0 18px rgba(255,225,70,0.18));
+}
+
+@media (max-width: 900px) {
+  .page { grid-template-columns: 1fr; padding: 0; }
+  .logoStage { display: none; }
+  }

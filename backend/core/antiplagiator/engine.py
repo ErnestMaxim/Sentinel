@@ -318,7 +318,7 @@ class AntiplagiarismEngine:
 
         # ── 1. Extraction ──
         t0 = time.monotonic()
-        chunks = self._extractor.read_and_chunk(file_path, arxiv_id=arxiv_id)
+        chunks, full_text, display_text = self._extractor.read_and_chunk(file_path, arxiv_id=arxiv_id)
         if not chunks:
             return {
                 "file_name": file_path.name,
@@ -386,6 +386,8 @@ class AntiplagiarismEngine:
             "global_plagiarism_score_percent": round(source_weighted * 100, 2),
             "total_reported_sources": len(ranked_sources),
             "total_suspicious_sources": len(sources),
+            "full_text": full_text,           # normalized text (used for matching)
+            "display_text": display_text,     # original extracted text (used for display)
             "document_stats": {
                 "total_words": total_words,
                 "total_chunks_analyzed": len(chunks),
@@ -927,10 +929,13 @@ class AntiplagiarismEngine:
                 reverse=True,
             )[:self.max_matches_per_source]
 
-        sources_with_exact = {aid: s for aid, s in sources.items() if s.has_exact_copies}
-        pool = sources_with_exact if sources_with_exact else sources
-
-        ranked = sorted(pool.values(), key=lambda s: len(s.matches), reverse=True)
+        # Return ALL sources sorted by similarity (exact copies first).
+        # The old code dropped every paraphrase-only source when any exact copy existed — fixed.
+        ranked = sorted(
+            sources.values(),
+            key=lambda s: (s.has_exact_copies, s.average_similarity),
+            reverse=True,
+        )
         return ranked[:self.max_sources]
 
 
@@ -1067,7 +1072,3 @@ def main() -> None:
         LOGGER.info("Report saved to %s", args.output.absolute())
     else:
         print(json.dumps(result, indent=indent, ensure_ascii=False))
-
-
-if __name__ == "__main__":
-    main()

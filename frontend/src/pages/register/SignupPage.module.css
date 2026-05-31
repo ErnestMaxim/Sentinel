@@ -1,29 +1,3 @@
-.page {
-  --panel: rgba(14, 18, 30, 0);
-  --panel-border: rgba(255, 255, 255, 0.16);
-  --text-main: #f4f7ff;
-  --text-muted: #b8c1d9;
-  --field-bg: rgba(255, 255, 255, 0.07);
-  --field-border: rgba(255, 255, 255, 0.16);
-  --field-focus: rgba(255, 233, 111, 0.75);
-  --btn-light: #f4f6fb;
-  --btn-dark: #131723;
-  --danger: #ff7b8d;
-
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  min-height: 100vh;
-
-  display: grid;
-  grid-template-columns: 680px 1fr;
-  align-items: stretch;
-  justify-items: start;
-
-  padding: 12px 20px 12px 12px;
-  font-family: "Sora", "Segoe UI", sans-serif;
-}
-
 .bgVideo {
   position: absolute;
   inset: 0;
@@ -43,6 +17,7 @@
 .authShell {
   width: min(100%, 420px);
   justify-self: start;
+  align-self: center;
 
   border-radius: 24px;
   padding: 26px;
@@ -309,14 +284,7 @@
 
 /* Tablet & Small Desktop (768px - 960px) */
 @media (max-width: 960px) {
-  .page {
-    grid-template-columns: 1fr;
-    align-items: center;
-    justify-items: center;
-    padding: 20px;
-  }
-
-  .authShell {
+    .authShell {
     width: min(100%, 480px);
     padding: 24px;
     border-radius: 20px;
@@ -337,11 +305,7 @@
 
 /* Tablet Landscape (641px - 767px) */
 @media (max-width: 767px) {
-  .page {
-    padding: 16px;
-  }
-
-  .authShell {
+    .authShell {
     width: 100%;
     padding: 20px;
     border-radius: 16px;
@@ -391,12 +355,7 @@
 
 /* Mobile (max 640px) */
 @media (max-width: 640px) {
-  .page {
-    padding: 12px;
-    min-height: auto;
-  }
-
-  .authShell {
+    .authShell {
     width: 100%;
     padding: 18px;
     border-radius: 14px;
@@ -480,11 +439,7 @@
 
 /* Small Phones (max 480px) */
 @media (max-width: 480px) {
-  .page {
-    padding: 10px;
-  }
-
-  .authShell {
+    .authShell {
     padding: 16px;
     border-radius: 12px;
   }

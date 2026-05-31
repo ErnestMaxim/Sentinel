@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 
-// ── Smooth value noise ────────────────────────────────────────────────────────
 function fade(t: number) { return t * t * t * (t * (t * 6 - 15) + 10) }
 function lerp(a: number, b: number, t: number) { return a + t * (b - a) }
 
@@ -48,80 +47,70 @@ export default function HeroGL() {
 
     const noise = new SmoothNoise()
 
-    // ── Use an offscreen canvas for contour rendering (perf) ─────────────────
     const off    = document.createElement('canvas')
     const offCtx = off.getContext('2d')!
 
     let W = 0, H = 0
     let raf: number
     let t = 0
-    let frame = 0
 
-    // ── Config ────────────────────────────────────────────────────────────────
-    const STEP           = 7     // grid resolution — higher = faster, less smooth
+    const STEP           = 10
     const CONTOUR_LEVELS = 22
     const NOISE_SCALE_X  = 0.003
     const NOISE_SCALE_Y  = 0.0045
-    const ANIM_SPEED     = 0.00014
-    // Only rebuild the noise field every N frames — big perf win
-    const FIELD_SKIP     = 3
+    const ANIM_SPEED     = 0.000007
+    const FIELD_SKIP     = 4
 
-    // Cached field
     let field: Float32Array | null = null
     let fieldCols = 0, fieldRows = 0
     let fieldMin = 0, fieldMax = 1
+    let fieldFrame = 0
 
-    // ── Resize — watch both window and sidebar CSS var changes ────────────────
+    // ── Resize ────────────────────────────────────────────────────────────────
     const resize = () => {
       const parent = canvas.parentElement
       if (!parent) return
-      // Read actual rendered width — respects sidebar transition
       W = parent.getBoundingClientRect().width
       H = parent.getBoundingClientRect().height
-      const dpr = window.devicePixelRatio || 1
+      const dpr = Math.min(window.devicePixelRatio || 1, 2)
       canvas.width  = W * dpr
       canvas.height = H * dpr
       canvas.style.width  = W + 'px'
       canvas.style.height = H + 'px'
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      off.width  = canvas.width
-      off.height = canvas.height
-      offCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      field = null  // force field rebuild on next frame
+      off.width  = Math.ceil(canvas.width  / 2)
+      off.height = Math.ceil(canvas.height / 2)
+      offCtx.setTransform(dpr / 2, 0, 0, dpr / 2, 0, 0)
+      field = null
     }
 
     resize()
-
-    // Watch window resize
     window.addEventListener('resize', resize)
-
-    // Watch sidebar CSS variable change via ResizeObserver on the parent
     const ro = new ResizeObserver(resize)
     if (canvas.parentElement) ro.observe(canvas.parentElement)
 
-    // ── Contour colors — much higher opacity ──────────────────────────────────
+    // ── Line styles (same as original) ────────────────────────────────────────
     const LINE_COLORS = [
-      'rgba(255,220,0,0.75)',    // bright yellow
-      'rgba(245,185,0,0.60)',    // amber
-      'rgba(220,155,0,0.50)',    // mid amber
-      'rgba(190,125,0,0.38)',    // deep amber
-      'rgba(150,90,0,0.26)',     // bronze
+      'rgba(255,220,0,0.75)',
+      'rgba(245,185,0,0.60)',
+      'rgba(220,155,0,0.50)',
+      'rgba(190,125,0,0.38)',
+      'rgba(150,90,0,0.26)',
     ]
 
-    function lineStyle(level: number): { color: string; width: number } {
+    // Pre-compute style index per level to avoid repeated division in the loop
+    const levelStyles = Array.from({ length: CONTOUR_LEVELS }, (_, level) => {
       const frac  = level / (CONTOUR_LEVELS - 1)
-      const idx   = Math.floor(frac * (LINE_COLORS.length - 1))
-      const color = LINE_COLORS[Math.min(idx, LINE_COLORS.length - 1)]
-      // Thicker for brighter (low-index) lines
-      const width = level % 4 === 0 ? 2.5 : 1.5
-      return { color, width }
-    }
+      const idx   = Math.min(Math.floor(frac * (LINE_COLORS.length - 1)), LINE_COLORS.length - 1)
+      return { color: LINE_COLORS[idx], width: level % 4 === 0 ? 2.5 : 1.5 }
+    })
 
     // ── Build noise field ─────────────────────────────────────────────────────
     function buildField() {
       fieldCols = Math.ceil(W / STEP) + 2
       fieldRows = Math.ceil(H / STEP) + 2
-      field     = new Float32Array(fieldCols * fieldRows)
+      if (!field || field.length !== fieldCols * fieldRows)
+        field = new Float32Array(fieldCols * fieldRows)
 
       let min = Infinity, max = -Infinity
       for (let row = 0; row < fieldRows; row++) {
@@ -141,88 +130,115 @@ export default function HeroGL() {
       fieldMax = max
     }
 
-    // ── Marching squares for one iso level ───────────────────────────────────
-    function drawContour(iso: number, color: string, lineWidth: number) {
+    // ── Marching squares — grouped by style to cut stroke() calls ─────────────
+    // Instead of one stroke() per level (22 calls), we batch all levels sharing
+    // the same color+width into one path → only 5 stroke() calls total.
+    function drawAllContours() {
       if (!field) return
-      offCtx.beginPath()
-      offCtx.strokeStyle = color
-      offCtx.lineWidth   = lineWidth
-
-      const get = (c: number, r: number) => field![r * fieldCols + c]
-
-      for (let row = 0; row < fieldRows - 1; row++) {
-        for (let col = 0; col < fieldCols - 1; col++) {
-          const x   = col * STEP
-          const y   = row * STEP
-          const v00 = get(col,     row)
-          const v10 = get(col + 1, row)
-          const v01 = get(col,     row + 1)
-          const v11 = get(col + 1, row + 1)
-
-          const idx =
-            (v00 > iso ? 8 : 0) |
-            (v10 > iso ? 4 : 0) |
-            (v11 > iso ? 2 : 0) |
-            (v01 > iso ? 1 : 0)
-
-          if (idx === 0 || idx === 15) continue
-
-          const eps  = 1e-9
-          const top    = { x: x + STEP * (iso - v00) / (v10 - v00 + eps), y }
-          const bottom = { x: x + STEP * (iso - v01) / (v11 - v01 + eps), y: y + STEP }
-          const left   = { x, y: y + STEP * (iso - v00) / (v01 - v00 + eps) }
-          const right  = { x: x + STEP, y: y + STEP * (iso - v10) / (v11 - v10 + eps) }
-
-          type P = { x: number; y: number }
-          const segs: [P, P][] = []
-          switch (idx) {
-            case 1:  case 14: segs.push([left,   bottom]); break
-            case 2:  case 13: segs.push([bottom, right]);  break
-            case 3:  case 12: segs.push([left,   right]);  break
-            case 4:  case 11: segs.push([top,    right]);  break
-            case 5:           segs.push([top,    left], [bottom, right]); break
-            case 6:  case 9:  segs.push([top,    bottom]); break
-            case 7:  case 8:  segs.push([top,    left]);   break
-            case 10:          segs.push([top,    right], [left, bottom]); break
-          }
-          segs.forEach(([p0, p1]) => {
-            offCtx.moveTo(p0.x, p0.y)
-            offCtx.lineTo(p1.x, p1.y)
-          })
-        }
-      }
-      offCtx.stroke()
-    }
-
-    // ── Main render loop ──────────────────────────────────────────────────────
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
-      t    += ANIM_SPEED
-      frame++
-
-      // Rebuild field only every FIELD_SKIP frames
-      if (!field || frame % FIELD_SKIP === 0) buildField()
-
-      // Draw contours onto offscreen canvas
-      offCtx.clearRect(0, 0, W, H)
 
       const range = fieldMax - fieldMin || 1
+
+      // Group levels by their style index
+      type StyleGroup = { color: string; width: number; paths: number[][] }
+      const groups = new Map<string, StyleGroup>()
+
       for (let level = 0; level < CONTOUR_LEVELS; level++) {
-        const iso          = fieldMin + range * (level / (CONTOUR_LEVELS - 1))
-        const { color, width } = lineStyle(level)
-        drawContour(iso, color, width)
+        const { color, width } = levelStyles[level]
+        const key = `${color}|${width}`
+        if (!groups.has(key)) groups.set(key, { color, width, paths: [] })
+
+        const iso = fieldMin + range * (level / (CONTOUR_LEVELS - 1))
+        const pts: number[] = []
+        const get = (c: number, r: number) => field![r * fieldCols + c]
+        const eps = 1e-9
+
+        for (let row = 0; row < fieldRows - 1; row++) {
+          for (let col = 0; col < fieldCols - 1; col++) {
+            const x   = col * STEP
+            const y   = row * STEP
+            const v00 = get(col,     row)
+            const v10 = get(col + 1, row)
+            const v01 = get(col,     row + 1)
+            const v11 = get(col + 1, row + 1)
+
+            const idx =
+              (v00 > iso ? 8 : 0) |
+              (v10 > iso ? 4 : 0) |
+              (v11 > iso ? 2 : 0) |
+              (v01 > iso ? 1 : 0)
+
+            if (idx === 0 || idx === 15) continue
+
+            const tx = x + STEP * (iso - v00) / (v10 - v00 + eps)
+            const bx = x + STEP * (iso - v01) / (v11 - v01 + eps)
+            const ly = y + STEP * (iso - v00) / (v01 - v00 + eps)
+            const ry = y + STEP * (iso - v10) / (v11 - v10 + eps)
+
+            // Emit segment pairs as flat [x0,y0,x1,y1, ...]
+            switch (idx) {
+              case 1: case 14: pts.push(x, ly, bx, y + STEP); break
+              case 2: case 13: pts.push(bx, y + STEP, x + STEP, ry); break
+              case 3: case 12: pts.push(x, ly, x + STEP, ry); break
+              case 4: case 11: pts.push(tx, y, x + STEP, ry); break
+              case 6: case  9: pts.push(tx, y, bx, y + STEP); break
+              case 7: case  8: pts.push(tx, y, x, ly); break
+              case  5: pts.push(tx, y, x, ly, bx, y + STEP, x + STEP, ry); break
+              case 10: pts.push(tx, y, x + STEP, ry, x, ly, bx, y + STEP); break
+            }
+          }
+        }
+        groups.get(key)!.paths.push(pts)
       }
 
-      // Blit offscreen → main canvas
+      // One stroke() call per unique style
+      offCtx.clearRect(0, 0, W, H)
+      for (const { color, width, paths } of groups.values()) {
+        offCtx.beginPath()
+        offCtx.strokeStyle = color
+        offCtx.lineWidth   = width
+        for (const pts of paths) {
+          for (let i = 0; i < pts.length; i += 4) {
+            offCtx.moveTo(pts[i],     pts[i + 1])
+            offCtx.lineTo(pts[i + 2], pts[i + 3])
+          }
+        }
+        offCtx.stroke()
+      }
+    }
+
+    // ── Cached vignette gradient (recreate only on resize) ────────────────────
+    let vigGrad: CanvasGradient | null = null
+    let vigW = 0, vigH = 0
+
+    function getVigGrad() {
+      if (vigGrad && vigW === W && vigH === H) return vigGrad
+      vigW = W; vigH = H
+      vigGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.65)
+      vigGrad.addColorStop(0,    'rgba(11,13,16,0.78)')
+      vigGrad.addColorStop(0.45, 'rgba(11,13,16,0.35)')
+      vigGrad.addColorStop(1,    'rgba(11,13,16,0.0)')
+      return vigGrad
+    }
+
+    // ── Main loop ─────────────────────────────────────────────────────────────
+    const t0 = performance.now()
+
+    const draw = () => {
+      raf = requestAnimationFrame(draw)
+      // Time from wall clock — stays smooth regardless of frame drops
+      t = (performance.now() - t0) * ANIM_SPEED
+
+      fieldFrame++
+      if (!field || fieldFrame % FIELD_SKIP === 0) buildField()
+
+      drawAllContours()
+
+      // Blit half-res offscreen → main canvas (browser scales up, cheap)
       ctx.clearRect(0, 0, W, H)
       ctx.drawImage(off, 0, 0, W, H)
 
-      // Vignette — darken center so text stays readable
-      const grad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.65)
-      grad.addColorStop(0,    'rgba(11,13,16,0.78)')
-      grad.addColorStop(0.45, 'rgba(11,13,16,0.35)')
-      grad.addColorStop(1,    'rgba(11,13,16,0.0)')
-      ctx.fillStyle = grad
+      // Vignette overlay (gradient is cached)
+      ctx.fillStyle = getVigGrad()!
       ctx.fillRect(0, 0, W, H)
     }
 
@@ -239,11 +255,11 @@ export default function HeroGL() {
     <canvas
       ref={canvasRef}
       style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 0,
+        position:      'absolute',
+        inset:         0,
+        zIndex:        0,
         pointerEvents: 'none',
-        display: 'block',
+        display:       'block',
       }}
       aria-hidden="true"
     />

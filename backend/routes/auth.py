@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User
-from schemas.users import UserResponse
+from schemas.users import UserResponse, UserUpdate
 from utils.email import send_password_reset_email
 from utils.security import create_access_token, decode_access_token, hash_password, verify_password
 
@@ -185,6 +185,39 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 @router.get("/me", response_model=UserResponse)
 def read_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if payload.first_name is not None:
+        current_user.first_name = payload.first_name.strip()
+    if payload.last_name is not None:
+        current_user.last_name = payload.last_name.strip()
+
+    if payload.new_password:
+        if len(payload.new_password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="New password must be at least 8 characters",
+            )
+        # Google-only accounts have no hashed_password — skip current check
+        if current_user.hashed_password:
+            if not payload.current_password or not verify_password(
+                payload.current_password, current_user.hashed_password
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Current password is incorrect",
+                )
+        current_user.hashed_password = hash_password(payload.new_password)
+
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 

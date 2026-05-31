@@ -5,6 +5,7 @@ export interface AuthUser {
   firstName: string
   lastName: string
   initials: string
+  avatar?: string   // optional profile picture URL
 }
 
 export interface AuthContextValue {
@@ -12,6 +13,7 @@ export interface AuthContextValue {
   loading: boolean
   signOut: () => void
   refreshUser: () => Promise<void>
+  setUserIcon: (url: string | undefined) => void
 }
 
 export const AuthContext = createContext<AuthContextValue>({
@@ -19,6 +21,7 @@ export const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signOut: () => {},
   refreshUser: async () => {},
+  setUserIcon: () => {},
 })
 
 // Hook lives here — no component in this file, so Fast Refresh is happy

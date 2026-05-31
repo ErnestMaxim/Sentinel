@@ -5,6 +5,7 @@ import difflib
 import json
 import logging
 import math
+import os
 import sys
 import time
 from collections import defaultdict
@@ -42,29 +43,12 @@ LOGGER = logging.getLogger("plagiarism_engine")
 # Constants
 # ---------------------------------------------------------------------------
 
-# Word cap before encoding — prevents OOM on pathological PDFs
 MAX_WORDS = 50_000
-
-# Number of chunks sampled across the document for routing vote
 ROUTING_SAMPLE_SIZE = 8
-
-# When routing confidence exceeds this, restrict to top-1 category only
 HIGH_CONFIDENCE_THRESHOLD = 0.90
-
-# Exact copied phrases shorter than this are considered boilerplate and discarded.
-# 50 chars ≈ 7–8 words of domain language.
 MIN_EXACT_PHRASE_CHARS = 50
-
-# Paraphrase mode — FAISS retrieves at this lower threshold to cast a wider net.
-# The cross-encoder then filters out false positives.
 PARAPHRASE_RETRIEVAL_THRESHOLD = 0.70
-
-# Cross-encoder logit above which a pair is considered a paraphrase.
-# 0.0 = sigmoid midpoint ("more likely relevant than not").
-# 3.0 = high confidence (~0.95 after sigmoid).
 PARAPHRASE_CROSS_SCORE_THRESHOLD = 0.0
-
-# Default cross-encoder model — fast, good quality on CPU
 DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
@@ -73,7 +57,6 @@ DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 # ---------------------------------------------------------------------------
 
 def _severity(similarity: float) -> str:
-    """Map a normalised similarity (0–1) to a human-readable severity tier."""
     if similarity >= 0.95:
         return "identical"
     if similarity >= 0.85:
@@ -82,20 +65,11 @@ def _severity(similarity: float) -> str:
 
 
 def _normalize_cross_score(logit: float) -> float:
-    """
-    Map a cross-encoder logit to [0, 1] via sigmoid so it can be compared
-    to cosine similarity values in the report.
-
-    logit=0.0 → 0.50 (threshold, borderline paraphrase)
-    logit=3.0 → 0.95 (high confidence)
-    logit=6.0 → 0.998 (near-certain)
-    """
     return 1.0 / (1.0 + math.exp(-logit))
 
 
 @dataclass
 class ChunkMatch:
-    """A single matched chunk between the query document and a database entry."""
     query_chunk_idx: int
     query_text: str
     db_chunk_idx: int
@@ -105,7 +79,7 @@ class ChunkMatch:
     exact_copied_phrases: list[str]
     db_source_type: str
     severity: str
-    detection: str = "exact"      # "exact" | "paraphrase"
+    detection: str = "exact"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -124,7 +98,6 @@ class ChunkMatch:
 
 @dataclass
 class SourceResult:
-    """Aggregated plagiarism matches for a single source document."""
     arxiv_id: str
     title: str
     matches: list[ChunkMatch] = field(default_factory=list)
@@ -158,7 +131,6 @@ class SourceResult:
 
 @dataclass
 class RoutingDecision:
-    """Records how category routing was resolved for a document."""
     enabled: bool
     categories: list[str] | None
     confidence: float
@@ -178,12 +150,6 @@ class RoutingDecision:
 # ---------------------------------------------------------------------------
 
 class AntiplagiarismEngine:
-    """
-    Main entry point for document plagiarism analysis.
-
-    Safe to use in a web API — init failures are caught and exposed via
-    `is_ready` / `init_error` rather than crashing the process.
-    """
 
     def __init__(
         self,
@@ -199,7 +165,6 @@ class AntiplagiarismEngine:
         confidence_threshold: float = 0.40,
         routing_top_k: int = 2,
         use_per_category_indexes: bool = False,
-        # Paraphrase detection
         use_reranker: bool = False,
         reranker_model: str = DEFAULT_RERANKER_MODEL,
     ) -> None:
@@ -239,20 +204,41 @@ class AntiplagiarismEngine:
         self._model = SentenceTransformer(model_name, device=device)
 
     def _setup_indexes(self, artifacts_dir: Path, data_dir: Path, nprobe: int) -> None:
-        self.index, self.metadata = load_global_index(artifacts_dir, nprobe)
+        """
+        Load FAISS index — either from the Modal remote server (when
+        FAISS_REMOTE_URL is set in the environment) or from local disk.
+        """
+        remote_url = os.getenv("FAISS_REMOTE_URL", "").strip()
 
-        dataset_path = data_dir / "chunked_database.jsonl"
-        self.dataset_texts = load_dataset_texts(dataset_path)
-        self._text_lookup = build_text_lookup(self.dataset_texts, self.metadata)
+        if remote_url:
+            # ── Remote mode: delegate all FAISS search to Modal ──────────────
+            LOGGER.info("FAISS_REMOTE_URL detected — using Modal RemoteIndex")
+            from engine_modules.remote_index import RemoteIndex
+            remote = RemoteIndex.from_env()
+            self.index         = remote
+            self.metadata      = remote.metadata   # grows lazily per search
+            self.dataset_texts = []
+            self._text_lookup  = {}
+            self.cat_indexes   = {}
+            self.cat_metadata  = {}
+            LOGGER.info("RemoteIndex ready -> %s", remote_url)
+        else:
+            # ── Local mode: original behaviour ───────────────────────────────
+            LOGGER.info("No FAISS_REMOTE_URL — using local FAISS index")
+            self.index, self.metadata = load_global_index(artifacts_dir, nprobe)
 
-        self.cat_indexes: dict[str, faiss.Index] = {}
-        self.cat_metadata: dict[str, list[dict]] = {}
-        if self.use_per_category_indexes:
-            self.cat_indexes, self.cat_metadata = load_per_category_indexes(
-                artifacts_dir / "category_indexes",
-                nprobe,
-                CATEGORY_CODE_TO_NAME,
-            )
+            dataset_path = data_dir / "chunked_database.jsonl"
+            self.dataset_texts = load_dataset_texts(dataset_path)
+            self._text_lookup = build_text_lookup(self.dataset_texts, self.metadata)
+
+            self.cat_indexes: dict[str, faiss.Index] = {}
+            self.cat_metadata: dict[str, list[dict]] = {}
+            if self.use_per_category_indexes:
+                self.cat_indexes, self.cat_metadata = load_per_category_indexes(
+                    artifacts_dir / "category_indexes",
+                    nprobe,
+                    CATEGORY_CODE_TO_NAME,
+                )
 
     def _setup_classifier(
         self, artifacts_dir: Path, artifact_name: str, enabled: bool
@@ -272,11 +258,6 @@ class AntiplagiarismEngine:
     def _setup_reranker(
         self, model_name: str, device: str, enabled: bool
     ) -> None:
-        """
-        Lazy-load the cross-encoder reranker.
-        Only imported and loaded when use_reranker=True so that the
-        sentence-transformers CrossEncoder dependency is optional.
-        """
         self._reranker = None
         if not enabled:
             return
@@ -302,19 +283,15 @@ class AntiplagiarismEngine:
         arxiv_id: str | None = None,
         paraphrase_mode: bool = False,
     ) -> dict[str, Any]:
-        """
-        Analyse a document for plagiarism with safety guards for division by zero.
-        """
         if not self.is_ready:
             return {"error": f"Engine not ready: {self.init_error}"}
 
-        # Paraphrase mode active check
         active_paraphrase = paraphrase_mode and self._reranker is not None
         timings: dict[str, float] = {}
 
         # ── 1. Extraction ──
         t0 = time.monotonic()
-        chunks, full_text = self._extractor.read_and_chunk(file_path, arxiv_id=arxiv_id)
+        chunks, full_text, display_text = self._extractor.read_and_chunk(file_path, arxiv_id=arxiv_id)
         if not chunks:
             return {
                 "file_name": file_path.name,
@@ -326,6 +303,7 @@ class AntiplagiarismEngine:
             }
 
         chunks = _truncate_chunks(chunks, MAX_WORDS)
+        chunks = _filter_chunks(chunks)
         total_words = sum(len(c.split()) for c in chunks)
         timings["extraction_s"] = round(time.monotonic() - t0, 3)
 
@@ -358,10 +336,8 @@ class AntiplagiarismEngine:
         t3 = time.monotonic()
         ranked_sources = self._rank_and_trim_sources(sources)
 
-        # Calculate score coverage safely
         flagged_words = len(counted_word_positions)
-        
-        # Guard against 0 words to prevent NaN in frontend
+
         if total_words > 0:
             word_coverage = flagged_words / total_words
             if ranked_sources:
@@ -376,13 +352,13 @@ class AntiplagiarismEngine:
         timings["ranking_s"] = round(time.monotonic() - t3, 3)
         timings["total_s"] = round(sum(timings.values()), 3)
 
-        # Final result assembly with standardized keys for frontend
         return {
             "file_name": file_path.name,
             "global_plagiarism_score_percent": round(source_weighted * 100, 2),
             "total_reported_sources": len(ranked_sources),
             "total_suspicious_sources": len(sources),
-            "full_text": normalized, 
+            "full_text": full_text,           # normalized (used for matching)
+            "display_text": display_text,     # original extracted text (used for display)
             "document_stats": {
                 "total_words": total_words,
                 "total_chunks_analyzed": len(chunks),
@@ -404,7 +380,6 @@ class AntiplagiarismEngine:
     # ------------------------------------------------------------------
 
     def _encode_batch(self, texts: list[str]) -> np.ndarray:
-        """Encode all texts in one batched SentenceTransformer call."""
         return self._model.encode(
             texts,
             convert_to_numpy=True,
@@ -418,10 +393,6 @@ class AntiplagiarismEngine:
     # ------------------------------------------------------------------
 
     def _decide_routing(self, query_vectors: np.ndarray) -> RoutingDecision:
-        """
-        Vote over a spread sample of chunks to choose categories.
-        When confidence > HIGH_CONFIDENCE_THRESHOLD, restricts to top-1 only.
-        """
         if not self.use_category_routing or self.clf is None:
             return RoutingDecision(
                 enabled=False, categories=None, confidence=0.0, strategy="global"
@@ -462,7 +433,6 @@ class AntiplagiarismEngine:
         top_categories = [str(c) for c in sorted(
             category_votes, key=category_votes.__getitem__, reverse=True
         )[:max_cats]]
-        top_categories = [str(c) for c in top_categories]
 
         strategy = (
             "per_category"
@@ -489,14 +459,6 @@ class AntiplagiarismEngine:
         self_arxiv_id: str | None,
         paraphrase_mode: bool,
     ) -> tuple[dict[str, SourceResult], dict[int, dict], set[int]]:
-        """
-        Run FAISS search, optionally rerank, and collect per-source matches.
-
-        Returns:
-          sources               — {arxiv_id: SourceResult}
-          flagged_chunk_map     — {chunk_idx: info_dict} for UI highlighting
-          counted_word_positions — unique word positions flagged (deduped)
-        """
         sources: dict[str, SourceResult] = {}
         flagged_chunk_map: dict[int, dict] = {}
         counted_word_positions: set[int] = set()
@@ -527,6 +489,11 @@ class AntiplagiarismEngine:
                     flagged_chunk_map[chunk_idx] = flagged_info
                 word_offset += chunk_words
         else:
+            # Pass original text chunks to RemoteIndex before search
+            # so it can send them to Modal for encoding (no-op for local FAISS)
+            if hasattr(self.index, "set_query_texts"):
+                self.index.set_query_texts(chunks)
+
             similarities, db_indices = self._search_global(
                 query_vectors, top_k, routing.categories
             )
@@ -560,8 +527,7 @@ class AntiplagiarismEngine:
         self_arxiv_id: str | None,
         paraphrase_mode: bool,
     ) -> dict | None:
-        # Collect all candidates above the retrieval threshold
-        candidates: list[tuple[float, dict, str]] = []  # (score, meta, db_text)
+        candidates: list[tuple[float, dict, str]] = []
         for raw_score, meta in zip(scores, metas):
             if self_arxiv_id and meta.get("arxiv_id") == self_arxiv_id:
                 continue
@@ -601,8 +567,7 @@ class AntiplagiarismEngine:
         self_arxiv_id: str | None,
         paraphrase_mode: bool,
     ) -> dict | None:
-        # Collect all candidates above the retrieval threshold
-        candidates: list[tuple[float, dict, str]] = []  # (score, meta, db_text)
+        candidates: list[tuple[float, dict, str]] = []
         for i in range(top_k):
             similarity = _clamp(float(scores[i]))
             if similarity < retrieval_threshold:
@@ -613,11 +578,16 @@ class AntiplagiarismEngine:
             meta = self.metadata[db_idx]
             if self_arxiv_id and meta.get("arxiv_id") == self_arxiv_id:
                 continue
-            db_text = (
-                self.dataset_texts[db_idx]
-                if db_idx < len(self.dataset_texts)
-                else "Text not available."
-            )
+
+            # Remote mode: db_text comes embedded in metadata from Modal response
+            # Local mode: look it up in dataset_texts
+            db_text = meta.get("text", "")
+            if not db_text:
+                db_text = (
+                    self.dataset_texts[db_idx]
+                    if self.dataset_texts and db_idx < len(self.dataset_texts)
+                    else "Text not available."
+                )
             candidates.append((similarity, meta, db_text))
 
         if not candidates:
@@ -649,10 +619,6 @@ class AntiplagiarismEngine:
         sources: dict[str, SourceResult],
         counted_positions: set[int],
     ) -> dict | None:
-        """
-        Standard (non-paraphrase) path.
-        Flag any candidate with cosine similarity >= flag_threshold.
-        """
         best_similarity = 0.0
         best_match_info: dict | None = None
 
@@ -699,11 +665,6 @@ class AntiplagiarismEngine:
         sources: dict[str, SourceResult],
         counted_positions: set[int],
     ) -> dict | None:
-        """
-        Paraphrase detection path.
-        The cross-encoder rescores all candidates; only those with
-        cross_score >= PARAPHRASE_CROSS_SCORE_THRESHOLD are flagged.
-        """
         candidate_texts = [db_text for _, _, db_text in candidates]
         meta_by_text    = {db_text: meta for _, meta, db_text in candidates}
 
@@ -724,7 +685,6 @@ class AntiplagiarismEngine:
             if meta is None:
                 continue
 
-            # Normalise cross-encoder logit to [0,1] for consistent reporting
             normalised = _normalize_cross_score(result.cross_score)
             arxiv_id   = meta.get("arxiv_id", "N/A")
 
@@ -764,10 +724,6 @@ class AntiplagiarismEngine:
         best_source_id: str,
         sources: dict[str, SourceResult],
     ) -> None:
-        """
-        Track unique word positions for the flagged chunk and attribute them
-        to the best-matching source. Called by both processing strategies.
-        """
         chunk_positions = set(range(word_offset, word_offset + chunk_words))
         new_flagged_positions = chunk_positions - counted_positions
         counted_positions.update(chunk_positions)
@@ -779,71 +735,15 @@ class AntiplagiarismEngine:
     # FAISS search strategies
     # ------------------------------------------------------------------
 
-
-    def _rerank_exact(
-        self,
-        query_vector: np.ndarray,
-        faiss_indices: np.ndarray,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Fallback reranker for IVFPQ indexes without direct map.
-        Re-encodes nothing — just returns PQ scores as-is but sorted,
-        filtering out invalid indices.
-        """
-        valid_mask  = faiss_indices >= 0
-        valid_idx   = faiss_indices[valid_mask]
-
-        if len(valid_idx) == 0:
-            return np.array([]), np.array([], dtype=int)
-
-        # We can't reconstruct from IVFPQ without direct map.
-        # Search again with k=1 per candidate to get PQ score — but that's
-        # too slow. Instead just return valid indices with a fixed high score
-        # so they pass the threshold filter downstream.
-        # The actual similarity check happens in _process_global_hits via
-        # the retrieval_threshold — we set that low enough to let PQ scores through.
-        raw_scores = np.linspace(0.30, 0.10, len(valid_idx), dtype="float32")
-        return raw_scores, valid_idx
-
     def _search_global(
         self,
         query_vectors: np.ndarray,
         top_k: int,
         categories: list[str] | None,
     ) -> tuple[np.ndarray, np.ndarray]:
-
-        faiss_top_k = min(self.index.ntotal, max(500, top_k * 100))
-
-        if categories:
-            LOGGER.info(">>> _search_global called — filter ENABLED for %s", categories)
-        else:
-            LOGGER.info(">>> _search_global called — filter DISABLED")
-
-        raw_scores, raw_indices = self.index.search(query_vectors, faiss_top_k)
-
-        # ── DEBUG — log first chunk rerank scores ────────────────────────
-        exact_scores_0, exact_indices_0 = self._rerank_exact(
-            query_vectors[0:1], raw_indices[0]
-        )
-        LOGGER.info(">>> RERANK chunk0: top5 exact scores = %s", 
-                    [round(float(s), 4) for s in exact_scores_0[:5]])
-        LOGGER.info(">>> RERANK chunk0: top5 arxiv_ids = %s",
-                    [self.metadata[int(i)].get("arxiv_id") 
-                    for i in exact_indices_0[:5] if 0 <= int(i) < len(self.metadata)])
-        # ─────────────────────────────────────────────────────────────────
-
-        reranked_scores  = np.full((len(query_vectors), top_k), fill_value=-1.0, dtype="float32")
-        reranked_indices = np.full((len(query_vectors), top_k), fill_value=-1, dtype="int64")
-
-        for i, (scores_row, indices_row) in enumerate(zip(raw_scores, raw_indices)):
-            exact_scores, exact_indices = self._rerank_exact(
-                query_vectors[i:i+1], indices_row
-            )
-            k = min(top_k, len(exact_scores))
-            reranked_scores[i,  :k] = exact_scores[:k]
-            reranked_indices[i, :k] = exact_indices[:k]
-
-        return reranked_scores, reranked_indices
+        """Search FAISS index and return real similarity scores."""
+        similarities, indices = self.index.search(query_vectors, k=top_k)
+        return similarities, indices
 
     def _filter_by_category(
         self,
@@ -853,20 +753,6 @@ class AntiplagiarismEngine:
         allowed_categories: list[str],
     ) -> tuple[np.ndarray, np.ndarray]:
         allowed = _expand_category_set(allowed_categories)
-        
-        # ── DEFINITIVE DEBUG — remove after fix confirmed ──
-        LOGGER.info(">>> FILTER CALLED: allowed_categories=%s  expanded=%s", allowed_categories, allowed)
-        
-        # Sample what categories the top FAISS hits actually have
-        sample_db_cats = set()
-        for col in range(min(5, indices.shape[1])):
-            db_idx = int(indices[0, col])
-            if 0 <= db_idx < len(self.metadata):
-                sample_db_cats.add(self.metadata[db_idx].get("top_category", "?"))
-        LOGGER.info(">>> TOP FAISS HIT CATEGORIES: %s", sample_db_cats)
-        LOGGER.info(">>> INTERSECTION TEST: %s", _expand_category_set(list(sample_db_cats)) & allowed)
-        # ──────────────────────────────────────────────────
-
         filtered_sim = np.full_like(similarities, -1.0)
         filtered_idx = np.full_like(indices, -1)
 
@@ -892,7 +778,6 @@ class AntiplagiarismEngine:
         top_k: int,
         allowed_categories: list[str],
     ) -> tuple[list[list[float]], list[list[dict]]]:
-        """Search each category's sub-index in parallel."""
         n_chunks = len(query_vectors)
         all_scores: list[list[float]] = [[] for _ in range(n_chunks)]
         all_metas:  list[list[dict]]  = [[] for _ in range(n_chunks)]
@@ -950,10 +835,6 @@ class AntiplagiarismEngine:
     def _find_exact_phrases(
         self, query_text: str, db_text: str, min_words: int = 4
     ) -> list[str]:
-        """
-        Word-level verbatim phrase detection.
-        Phrases shorter than MIN_EXACT_PHRASE_CHARS are discarded as boilerplate.
-        """
         query_words = query_text.split()
         db_words    = db_text.split()
         matcher = difflib.SequenceMatcher(None, query_words, db_words, autojunk=False)
@@ -980,7 +861,6 @@ class AntiplagiarismEngine:
     def _rank_and_trim_sources(
         self, sources: dict[str, SourceResult]
     ) -> list[SourceResult]:
-        """Trim each source to its top matches, rank by match count."""
         for source in sources.values():
             source.matches = sorted(
                 source.matches,
@@ -988,10 +868,13 @@ class AntiplagiarismEngine:
                 reverse=True,
             )[:self.max_matches_per_source]
 
-        sources_with_exact = {aid: s for aid, s in sources.items() if s.has_exact_copies}
-        pool = sources_with_exact if sources_with_exact else sources
-
-        ranked = sorted(pool.values(), key=lambda s: len(s.matches), reverse=True)
+        # Sort ALL sources by average similarity (exact copies first, then by score).
+        # Previously this dropped paraphrase-only sources when exact copies existed — fixed.
+        ranked = sorted(
+            sources.values(),
+            key=lambda s: (s.has_exact_copies, s.average_similarity if hasattr(s, 'average_similarity') else len(s.matches)),
+            reverse=True,
+        )
         return ranked[:self.max_sources]
 
 
@@ -1004,7 +887,6 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 
 def _expand_category_set(categories: list[str]) -> set[str]:
-    """Accept both code ('cs') and name ('Computer Science') forms."""
     expanded = set()
     for cat in categories:
         cat = str(cat)
@@ -1015,7 +897,6 @@ def _expand_category_set(categories: list[str]) -> set[str]:
 
 
 def _spread_sample(n: int, k: int) -> list[int]:
-    """Return up to k indices spread evenly across [0, n)."""
     if n <= k:
         return list(range(n))
     step = n / k
@@ -1023,7 +904,6 @@ def _spread_sample(n: int, k: int) -> list[int]:
 
 
 def _truncate_chunks(chunks: list[str], max_words: int) -> list[str]:
-    """Drop trailing chunks once cumulative word count exceeds max_words."""
     result, total = [], 0
     for chunk in chunks:
         words = len(chunk.split())
@@ -1038,6 +918,50 @@ def _truncate_chunks(chunks: list[str], max_words: int) -> list[str]:
     return result
 
 
+def _filter_chunks(chunks: list[str]) -> list[str]:
+    """
+    Remove chunks that are mostly non-linguistic content:
+    - Binary / matrix rows  (e.g. "0 0 1 0 0 1 1 0 ...")
+    - Very short chunks (fewer than 8 words)
+    - Chunks where > 55% of tokens are purely numeric / single binary digits
+    - Chunks with very low unique-word ratio (repetitive symbol noise)
+    """
+    filtered = []
+    for chunk in chunks:
+        words = chunk.split()
+        if len(words) < 8:
+            continue
+
+        # Count purely numeric tokens (integers, floats, single 0/1 digits)
+        numeric = sum(
+            1 for w in words
+            if w in ("0", "1") or w.replace(".", "").replace("-", "").isdigit()
+        )
+        if numeric / len(words) > 0.55:
+            continue
+
+        # Catch matrix rows: lots of single-char tokens that are digits/symbols
+        single_char = sum(1 for w in words if len(w) == 1)
+        if single_char / len(words) > 0.70:
+            continue
+
+        # Catch very low linguistic diversity (e.g. repeated symbol sequences)
+        unique_ratio = len(set(words)) / len(words)
+        if unique_ratio < 0.15 and len(words) > 20:
+            continue
+
+        filtered.append(chunk)
+
+    kept  = len(filtered)
+    total = len(chunks)
+    if kept < total:
+        LOGGER.info(
+            "Chunk filter: kept %d / %d chunks (removed %d noisy chunks)",
+            kept, total, total - kept,
+        )
+    return filtered
+
+
 def _format_flagged_chunks(flagged_map: dict[int, dict]) -> list[dict]:
     return [{"chunk_idx": idx, **info} for idx, info in sorted(flagged_map.items())]
 
@@ -1049,43 +973,33 @@ def _format_flagged_chunks(flagged_map: dict[int, dict]) -> list[dict]:
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Antiplagiarism Engine CLI")
 
-    # I/O
     parser.add_argument("--input",    type=Path, required=True)
     parser.add_argument("--output",   type=Path, default=None)
     parser.add_argument("--arxiv-id", type=str,  default=None)
     parser.add_argument("--pretty",   action="store_true")
 
-    # Model / hardware
     parser.add_argument("--model-name", type=str, default=DEFAULT_MODEL)
     parser.add_argument("--device",     type=str, default="auto",
                         choices=["auto", "cpu", "cuda"])
 
-    # Paths
     parser.add_argument("--artifacts-dir", type=Path,
                         default=Path("backend/core/antiplagiator/artifacts"))
     parser.add_argument("--data-dir", type=Path,
                         default=Path("backend/core/antiplagiator/data/processed"))
 
-    # Search tuning
     parser.add_argument("--threshold",   type=float, default=0.85)
     parser.add_argument("--top-k",       type=int,   default=5)
     parser.add_argument("--nprobe",      type=int,   default=DEFAULT_NPROBE)
     parser.add_argument("--max-sources", type=int,   default=10)
     parser.add_argument("--max-matches", type=int,   default=5)
 
-    # Routing flags
-    parser.add_argument("--no-routing",           action="store_true",
-                        help="Disable category routing — always search globally")
-    parser.add_argument("--per-category-indexes", action="store_true",
-                        help="Use per-category FAISS sub-indexes")
-
-    # Paraphrase detection
-    parser.add_argument("--paraphrase-mode", action="store_true",
-                        help="Enable cross-encoder reranker to catch paraphrased plagiarism")
-    parser.add_argument("--reranker-model", type=str, default=DEFAULT_RERANKER_MODEL,
-                        help="HuggingFace cross-encoder model for paraphrase detection")
+    parser.add_argument("--no-routing",           action="store_true")
+    parser.add_argument("--per-category-indexes", action="store_true")
+    parser.add_argument("--paraphrase-mode",      action="store_true")
+    parser.add_argument("--reranker-model", type=str, default=DEFAULT_RERANKER_MODEL)
 
     return parser
+
 
 def main() -> None:
     args = _build_arg_parser().parse_args()
@@ -1129,7 +1043,3 @@ def main() -> None:
     else:
         print(json.dumps(result, indent=indent, ensure_ascii=False))
 
-
-
-if __name__ == "__main__":
-    main()

@@ -4,13 +4,30 @@
   top: 0;
   left: 0;
   bottom: 0;
-  width: 270px;
+  width: 220px;
   z-index: 100;
-  background: rgba(255, 255, 255, 0.045); /* very subtle white tint */
-  backdrop-filter: blur(24px);             /* the actual glass blur */
-  -webkit-backdrop-filter: blur(24px);     /* Safari support */
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04);
+
+  /* ── Apple-style glass ──────────────────────── */
+  /* Lowered opacity to make it much more transparent */
+  background: rgba(18, 22, 33, 0.05);
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+
+  /* Light crisp borders to define the edge even when transparent */
+  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    8px 0 24px rgba(0, 0, 0, 0.4);
+
+  /* Very subtle gradient to give it a slight physical presence */
+  background-image: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.03) 0%,
+    rgba(255,255,255,0.00) 40%,
+    rgba(0,0,0,0.08) 100%
+  );
+
   display: flex;
   flex-direction: column;
   padding: 20px 12px 20px;
@@ -67,14 +84,15 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.25);
   color: rgba(244, 247, 255, 0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 200ms, color 200ms, border-color 200ms;
+  transition: background 200ms, color 200ms, border-color 200ms, box-shadow 200ms;
   padding: 0;
 }
 
@@ -104,11 +122,11 @@
 
 .item {
   display: flex;
-  height: 3rem;
+  height: 44px;
   align-items: center;
   gap: 15px;
   justify-content: left;
-  padding: 9px 15px;
+  padding: 0 15px;
   border-radius: 6px;
   text-decoration: none;
   color: rgba(244, 247, 255, 0.55);
@@ -125,7 +143,10 @@
 
 .collapsed .item {
   justify-content: center;
-  padding: 9px;
+  padding: 0;
+  width: 44px;
+  height: 44px;
+  align-self: center;
 }
 
 .item:hover {
@@ -134,8 +155,9 @@
 }
 
 .active {
-  background: rgba(255, 220, 0, 0.12);
-  color: #FFDC00;
+  background: rgba(255, 221, 0, 0.1);
+  color: #f4f7ff;
+  box-shadow: inset 0 1px 0 rgba(255,220,0,0.15), inset 0 -1px 0 rgba(255,220,0,0.06);
 }
 
 .active:hover {
@@ -181,8 +203,9 @@
   gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 1px 4px rgba(0,0,0,0.2);
   margin-bottom: 4px;
   overflow: hidden;
   transition: padding 420ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -195,17 +218,27 @@
 
 .avatar {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: #FFDC00;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #ffdd0000;
   color: #0b0d10;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   letter-spacing: 0.02em;
+  overflow: hidden;
+  border: 2px solid rgba(255,220,0,0.3);
+  box-shadow: 0 0 0 1px rgba(255,220,0,0.12);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .userInfo {
@@ -248,7 +281,10 @@
 
 .collapsed .sidebarFooter .item {
   justify-content: center;
-  padding: 9px;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  align-self: center;
 }
 
 .cta {
@@ -369,7 +405,53 @@
     position: fixed;
     inset: 0;
     z-index: 99;
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(2px);
   }
+}
+/* ── Auth loading skeleton ────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+.authSkeleton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+
+.skeletonAvatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.06) 25%,
+    rgba(255,255,255,0.12) 50%,
+    rgba(255,255,255,0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+.skeletonLine {
+  flex: 1;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.06) 25%,
+    rgba(255,255,255,0.12) 50%,
+    rgba(255,255,255,0.06) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+/* ── Print: hide entire sidebar + mobile bar ── */
+@media print {
+  .sidebar    { display: none !important; }
+  .mobileBar  { display: none !important; }
+  .backdrop   { display: none !important; }
 }

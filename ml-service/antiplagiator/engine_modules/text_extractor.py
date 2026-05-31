@@ -39,18 +39,18 @@ class TextExtractor:
         chunk_size: int = 100,
         overlap: int = 30,
         arxiv_id: str | None = None,
-    ) -> tuple[list[str], str]:          # ← change return type
+    ) -> tuple[list[str], str, str]: 
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         raw_text = self._extract_raw_text(file_path, arxiv_id)
         if not raw_text:
             LOGGER.warning("Could not extract any text from %s", file_path)
-            return [], ""                # ← return empty string too
+            return [], "", ""
 
         normalized = normalize_text_for_fingerprint(raw_text)
         chunks = self._chunk_words(normalized, chunk_size, overlap, min_words=20)
-        return chunks, normalized        # ← return both
+        return chunks, normalized, raw_text
 
     # ------------------------------------------------------------------
     # LaTeX helpers

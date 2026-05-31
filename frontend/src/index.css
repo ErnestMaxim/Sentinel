@@ -22,6 +22,6 @@ body,
 
 body {
   min-width: 320px;
-  color: #11263d;
-  background: #f2f7ff;
+  color: #f4f7ff;
+  background: #08090e; /* dark fallback — prevents flash on page load */
 }

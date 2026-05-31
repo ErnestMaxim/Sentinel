@@ -9,6 +9,7 @@ from typing import List
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
@@ -46,8 +47,8 @@ def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
     payload = {
         "file_path": file_path,
         "arxiv_id": arxiv_id,
-        "threshold": 0.75,   # PQ scores are 0.14-0.29 for exact matches
-        "top_k": 5,
+        "threshold": 0.60,
+        "top_k": 50,
         "paraphrase_mode": False,
     }
 
@@ -71,7 +72,7 @@ def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
                 detail=f"ML service error {response.status_code}: {response.text}",
             )
 
-        return response.json()  # {"result": {...}, "processing_time_seconds": 12.3}
+        return response.json()
 
     except httpx.ConnectError:
         raise HTTPException(
@@ -112,24 +113,26 @@ def upload_document(
 @router.post("/{document_id}/analyze", response_model=DocumentResponse)
 def analyze_document(
     document_id: int,
+    force: bool = False,   # if True, delete cached report and re-run
     db: Session = Depends(get_db),
 ):
-    # 1. Verify document exists
+
     doc = db.query(Document).filter(
         Document.id == document_id,
-        Document.is_deleted == False,  # noqa: E712
+        Document.is_deleted == False,
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # 2. Return cached result if already analyzed
     existing = db.query(PlagiarismReport).filter(
         PlagiarismReport.document_id == document_id
     ).first()
-    if existing:
+    if existing and not force:
         return _get_doc_with_report(document_id, db)
+    if existing and force:
+        db.delete(existing)
+        db.commit()
 
-    # 3. Mark as processing
     doc.status = DocumentStatus.PROCESSING
     db.commit()
 
@@ -152,7 +155,6 @@ def analyze_document(
             db.commit()
             raise HTTPException(status_code=422, detail=result["error"])
 
-        # Save report to DB (same as before)
         report = PlagiarismReport(
             document_id=document_id,
             global_score=result.get("global_plagiarism_score_percent", 0.0),
@@ -192,12 +194,30 @@ def get_user_documents(
         .options(joinedload(Document.report))
         .filter(
             Document.user_id == current_user.id,
-            Document.is_deleted == False,  # noqa: E712
+            Document.is_deleted == False,
         )
         .order_by(Document.uploaded_at.desc())
         .all()
     )
     return docs
+
+@router.get("/{document_id}/file")
+def get_document_file(document_id: int, db: Session = Depends(get_db)):
+    """Serve the original uploaded file so the frontend can render it."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.is_deleted == False,  # noqa: E712
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    return FileResponse(
+        doc.file_path,
+        media_type="application/pdf",
+        filename=doc.filename,
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: int, db: Session = Depends(get_db)):

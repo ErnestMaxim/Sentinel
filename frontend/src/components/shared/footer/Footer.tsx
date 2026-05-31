@@ -1,38 +1,48 @@
 import { Link } from 'react-router-dom'
 import styles from './Footer.module.css'
-import sentinelLogo from '../../../assets/images/sentinel_logo.png'
 
 export default function Footer() {
   return (
     <footer className={styles.footer}>
       <div className={styles.inner}>
 
-        {/* Top row: logo + nav + cta */}
+        {/* ── Top: brand statement + links ── */}
         <div className={styles.top}>
-          <Link to="/" className={styles.logo}>
-            <img src={sentinelLogo} alt="Sentinel" className={styles.logoImg} />
-            <span className={styles.logoText}>Sentinel</span>
-          </Link>
+          <div className={styles.brand}>
+            <span className={styles.brandName}>Sentinel</span>
+            <p className={styles.brandTagline}>
+              Academic plagiarism detection<br />powered by semantic AI.
+            </p>
+          </div>
 
-          <nav className={styles.nav} aria-label="Footer navigation">
-            <a href="#product" className={styles.link}>Product</a>
-            <a href="#company" className={styles.link}>Company</a>
-            <a href="#contact" className={styles.link}>Contact</a>
-            <Link to="/signin" className={styles.link}>Sign in</Link>
-          </nav>
-
-          <Link to="/signup" className={styles.cta}>Get started</Link>
+          <div className={styles.cols}>
+            <div className={styles.col}>
+              <p className={styles.colHead}>Product</p>
+              <Link to="/check"   className={styles.colLink}>Check a document</Link>
+              <Link to="/history" className={styles.colLink}>History</Link>
+              <Link to="/signup"  className={styles.colLink}>Get started</Link>
+            </div>
+            <div className={styles.col}>
+              <p className={styles.colHead}>Technology</p>
+              <a href="#features" className={styles.colLink}>How it works</a>
+              <a href="#features" className={styles.colLink}>Semantic detection</a>
+              <a href="#features" className={styles.colLink}>LaTeX parsing</a>
+            </div>
+            <div className={styles.col}>
+              <p className={styles.colHead}>Account</p>
+              <Link to="/signin"  className={styles.colLink}>Sign in</Link>
+              <Link to="/signup"  className={styles.colLink}>Register</Link>
+              <Link to="/settings" className={styles.colLink}>Settings</Link>
+            </div>
+          </div>
         </div>
 
-        {/* Divider */}
-        <div className={styles.divider} />
-
-        {/* Bottom row: copyright + legal */}
+        {/* ── Bottom bar ── */}
         <div className={styles.bottom}>
-          <span className={styles.copy}>© 2026 Sentinel. All rights reserved.</span>
+          <span className={styles.copy}>© 2026 Sentinel.</span>
           <div className={styles.legal}>
-            <a href="#privacy" className={styles.legalLink}>Privacy Policy</a>
-            <a href="#terms" className={styles.legalLink}>Terms of Service</a>
+            <a href="#privacy" className={styles.legalLink}>Privacy</a>
+            <a href="#terms"   className={styles.legalLink}>Terms</a>
           </div>
         </div>
 

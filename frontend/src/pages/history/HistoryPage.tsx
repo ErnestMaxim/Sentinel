@@ -1,501 +1,488 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  createColumnHelper,
+  flexRender,
+  type SortingState,
+  type ColumnMeta,
+} from '@tanstack/react-table'
 import Navbar from '../../components/shared/navbar/Navbar'
-import { generatePdfReport } from '../../utils/generateReport'
+import { formatDate, formatDateTime } from '../../utils/format'
+import type { HistoryDocument } from '../../types/documents'
+import { fetchDocuments, reanalyzeDocument } from './api'
+import { scoreColorClass } from './utils'
+import StatusCell  from './components/StatusCell'
+import ReportModal  from './components/ReportModal'
 import styles from './HistoryPage.module.css'
+import { REPORT_STORAGE_KEY, type StoredReport } from '../report/ReportPage'
 
-// ── Types (mirrors DocumentResponse from AnalyzerPage) ───────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 
-interface EngineReport {
-  file_name:                       string
-  global_plagiarism_score_percent: number
-  total_suspicious_sources:        number
-  total_reported_sources:          number
-  document_stats: {
-    total_words:           number
-    total_chunks_analyzed: number
+declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    align?: 'left' | 'right' | 'center'
   }
-  analysis_config: {
-    threshold_used:   number
-    embedding_model:  string
-    category_routing: { enabled: boolean; routed_to: string[] | null }
-  }
-  sources: {
-    arxiv_id:                   string
-    title:                      string
-    match_count:                number
-    average_similarity_percent: number
-    has_exact_copies:           boolean
-    matches:                    unknown[]
-  }[]
 }
 
-interface HistoryDocument {
-  id:          number
-  filename:    string
-  status:      'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
-  word_count:  number | null
-  uploaded_at: string
-  report?: {
-    id:                      number
-    global_score:            number
-    report_data:             EngineReport
-    processing_time_seconds: number | null
-    similarity_threshold:    number
-    created_at:              string
-  } | null
-}
+// ── Sort indicator ───────────────────────────────────────────────────────────
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function scoreClass(score: number): string {
-  if (score <= 20) return styles.scoreLow
-  if (score <= 50) return styles.scoreMid
-  return styles.scoreHigh
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day:   '2-digit',
-    month: 'short',
-    year:  'numeric',
-  })
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', {
-    day:    '2-digit',
-    month:  'short',
-    year:   'numeric',
-    hour:   '2-digit',
-    minute: '2-digit',
-  })
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function FileIcon() {
+function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
+  if (sorted === 'asc') return (
+    <svg className={styles.sortIcon} width="9" height="9" viewBox="0 0 9 9" fill="currentColor">
+      <path d="M4.5 1.5L8 7H1L4.5 1.5Z"/>
+    </svg>
+  )
+  if (sorted === 'desc') return (
+    <svg className={styles.sortIcon} width="9" height="9" viewBox="0 0 9 9" fill="currentColor">
+      <path d="M4.5 7.5L1 2H8L4.5 7.5Z"/>
+    </svg>
+  )
   return (
-    <div className={styles.fileIcon}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-        <polyline points="10 9 9 9 8 9"/>
-      </svg>
-    </div>
+    <svg className={`${styles.sortIcon} ${styles.sortIconNeutral}`} width="9" height="12" viewBox="0 0 9 12" fill="currentColor">
+      <path d="M4.5 1L7.5 4.5H1.5L4.5 1Z" opacity="0.35"/>
+      <path d="M4.5 11L1.5 7.5H7.5L4.5 11Z" opacity="0.35"/>
+    </svg>
   )
 }
 
-function SkeletonRows() {
-  return (
-    <>
-      {[1, 2, 3, 4].map(i => (
-        <tr key={i} className={`${styles.tableRow} ${styles.skeletonRow}`}>
-          <td><div className={styles.skeletonLine} style={{ width: `${60 + i * 8}%` }} /></td>
-          <td><div className={styles.skeletonLine} style={{ width: '60px' }} /></td>
-          <td><div className={styles.skeletonLine} style={{ width: '70px' }} /></td>
-          <td><div className={styles.skeletonLine} style={{ width: '90px' }} /></td>
-          <td><div className={styles.skeletonLine} style={{ width: '50px', marginLeft: 'auto' }} /></td>
-        </tr>
-      ))}
-    </>
-  )
-}
+// ── Constants ────────────────────────────────────────────────────────────────
 
-// ── Report Modal ──────────────────────────────────────────────────────────────
+const PAGE_SIZE  = 10
+const colHelper  = createColumnHelper<HistoryDocument>()
 
-interface ReportModalProps {
-  doc: HistoryDocument
-  onClose: () => void
-}
+// ── Page component ───────────────────────────────────────────────────────────
 
-function ReportModal({ doc, onClose }: ReportModalProps) {
-  const [downloading, setDownloading] = useState(false)
+export default function HistoryPage() {
+  const navigate = useNavigate()
 
-  const report   = doc.report
-  const score    = report?.global_score ?? 0
-  const originality = 100 - score
+  const [docs,          setDocs]          = useState<HistoryDocument[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [error,         setError]         = useState<string | null>(null)
+  const [globalFilter,  setGlobalFilter]  = useState('')
+  const [sorting,       setSorting]       = useState<SortingState>([{ id: 'submitted', desc: true }])
+  const [selected,      setSelected]      = useState<HistoryDocument | null>(null)
+  const [reanalyzingId, setReanalyzingId] = useState<number | null>(null)
 
-  async function handleDownload() {
-    if (!report?.report_data) return
-    setDownloading(true)
-    try {
-      await generatePdfReport(report.report_data, doc.filename)
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  // Close on backdrop click
-  function handleBackdrop(e: React.MouseEvent<HTMLDivElement>) {
-    if (e.target === e.currentTarget) onClose()
-  }
-
-  // Close on Escape key
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+    fetchDocuments()
+      .then(setDocs)
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load history'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  function openReport(e: React.MouseEvent, doc: HistoryDocument) {
+    e.stopPropagation()
+    if (!doc.report?.report_data) return
+    const stored: StoredReport = {
+      report:     doc.report.report_data,
+      filename:   doc.filename,
+      date:       formatDateTime(doc.report.created_at),
+      documentId: doc.id,
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+    sessionStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(stored))
+    navigate('/report')
+  }
 
-  const scoreColor = originality >= 75 ? '#4ade80' : originality >= 50 ? '#FFDC00' : '#f87171'
+  function downloadReport(e: React.MouseEvent, doc: HistoryDocument) {
+    e.stopPropagation()
+    if (!doc.report?.report_data) return
+    const stored: StoredReport = {
+      report:     doc.report.report_data,
+      filename:   doc.filename,
+      date:       formatDateTime(doc.report.created_at),
+      documentId: doc.id,
+      autoPrint:  true,
+    }
+    sessionStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(stored))
+    navigate('/report')
+  }
 
-  return (
-    <div className={styles.modalOverlay} onClick={handleBackdrop}>
-      <div className={styles.modal}>
-        {/* Header */}
-        <div className={styles.modalHeader}>
-          <div>
-            <h2 className={styles.modalTitle}>Report Details</h2>
-            <p className={styles.modalFilename}>{doc.filename}</p>
+  async function handleReanalyze(e: React.MouseEvent, doc: HistoryDocument) {
+    e.stopPropagation()
+    setReanalyzingId(doc.id)
+    try {
+      const updated = await reanalyzeDocument(doc.id)
+      setDocs(prev => prev.map(d => d.id === doc.id ? updated : d))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Re-analysis failed')
+    } finally {
+      setReanalyzingId(null)
+    }
+  }
+
+  // ── Column definitions ────────────────────────────────────────────────────
+
+  const columns = useMemo(() => [
+    colHelper.accessor('filename', {
+      id:       'document',
+      header:   'Document',
+      filterFn: 'includesString',
+      sortingFn:'alphanumeric',
+      meta:     { align: 'left' },
+      cell: ({ row }) => {
+        const doc = row.original
+        return (
+          <div className={styles.fileCell}>
+            <span className={styles.fileIconWrap}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+            </span>
+            <div className={styles.fileInfo}>
+              <span className={styles.fileName}>{doc.filename}</span>
+              <span className={styles.fileWords}>
+                {doc.word_count != null ? `${doc.word_count.toLocaleString()} words` : '—'}
+              </span>
+            </div>
           </div>
-          <button className={styles.modalClose} onClick={onClose} aria-label="Close">×</button>
-        </div>
+        )
+      },
+    }),
 
-        {report ? (
-          <>
-            {/* Score */}
-            <div className={styles.modalScore}>
-              <div>
-                <div className={styles.modalScoreNum} style={{ color: scoreColor }}>
-                  {originality.toFixed(1)}%
-                </div>
-                <div className={styles.modalScoreLabel}>originality</div>
-              </div>
-              <div style={{ flex: 1, borderLeft: '1px solid rgba(255,255,255,0.07)', paddingLeft: 20 }}>
-                <div style={{ fontSize: 13, color: '#6b7899', marginBottom: 4 }}>Similarity score</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: score > 50 ? '#f87171' : '#e8edff' }}>
-                  {score.toFixed(1)}%
-                </div>
-              </div>
-              <div style={{ borderLeft: '1px solid rgba(255,255,255,0.07)', paddingLeft: 20 }}>
-                <div style={{ fontSize: 13, color: '#6b7899', marginBottom: 4 }}>Checked</div>
-                <div style={{ fontSize: 13, color: '#a8b4d4' }}>
-                  {formatDateTime(report.created_at)}
-                </div>
-              </div>
-            </div>
+    colHelper.accessor(row => row.report?.global_score ?? null, {
+      id:                'similarity',
+      header:            'Similarity',
+      enableGlobalFilter: false,
+      sortingFn:         'basic',
+      meta:              { align: 'right' },
+      cell: ({ getValue }) => {
+        const score = getValue()
+        return (
+          <span className={score !== null ? scoreColorClass(score) : styles.scoreNone}>
+            {score !== null ? `${score.toFixed(1)}%` : '—'}
+          </span>
+        )
+      },
+    }),
 
-            {/* Meta cards */}
-            <div className={styles.modalMeta}>
-              {[
-                { val: doc.word_count?.toLocaleString() ?? '—', key: 'Words' },
-                {
-                  val: report.report_data?.document_stats?.total_chunks_analyzed ?? '—',
-                  key: 'Chunks',
-                },
-                {
-                  val: report.report_data?.sources?.length ?? '—',
-                  key: 'Sources',
-                },
-              ].map(m => (
-                <div key={m.key} className={styles.modalMetaCard}>
-                  <div className={styles.modalMetaVal}>{m.val}</div>
-                  <div className={styles.modalMetaKey}>{m.key}</div>
-                </div>
-              ))}
-            </div>
+    colHelper.accessor('status', {
+      id:                'status',
+      header:            'Status',
+      enableGlobalFilter: false,
+      enableSorting:     false,
+      meta:              { align: 'right' },
+      cell: ({ getValue }) => <StatusCell status={getValue()} />,
+    }),
 
-            {/* Actions */}
-            <div className={styles.modalActions}>
+    colHelper.accessor('uploaded_at', {
+      id:                'submitted',
+      header:            'Submitted',
+      enableGlobalFilter: false,
+      sortingFn:         'alphanumeric',
+      meta:              { align: 'right' },
+      cell: ({ getValue }) => (
+        <span className={styles.dateText}>{formatDate(getValue())}</span>
+      ),
+    }),
+
+    colHelper.display({
+      id:           'action',
+      header:       'Action',
+      enableSorting: false,
+      meta:          { align: 'right' },
+      cell: ({ row }) => {
+        const doc           = row.original
+        const hasReport     = doc.status === 'COMPLETED' && !!doc.report?.report_data
+        const isReanalyzing = reanalyzingId === doc.id
+        const isCompleted   = doc.status === 'COMPLETED'
+        return (
+          <div className={styles.actionCell}>
+            {isCompleted && (
               <button
-                className={styles.modalDownloadBtn}
-                onClick={handleDownload}
-                disabled={downloading}
+                className={styles.reanalyzeBtn}
+                onClick={e => handleReanalyze(e, doc)}
+                disabled={isReanalyzing}
               >
-                {downloading ? (
-                  <span className={styles.spinner} />
-                ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                {isReanalyzing
+                  ? <><span className={styles.spinner} />Running…</>
+                  : <>↺ Re-analyze</>}
+              </button>
+            )}
+            {hasReport && (
+              <>
+                <button className={styles.viewBtn} onClick={e => openReport(e, doc)}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  View
+                </button>
+                <button className={styles.downloadBtn} onClick={e => downloadReport(e, doc)}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                   </svg>
-                )}
-                {downloading ? 'Generating report…' : 'Download .docx report'}
-              </button>
-              <button className={styles.modalCancelBtn} onClick={onClose}>Close</button>
-            </div>
-          </>
-        ) : (
-          <p style={{ color: '#6b7899', fontSize: 14 }}>
-            No report data available for this document.
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
+                  PDF
+                </button>
+              </>
+            )}
+          </div>
+        )
+      },
+    }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [reanalyzingId])
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+  // ── Table instance ─────────────────────────────────────────────────────────
 
-export default function HistoryPage() {
-  const [docs,    setDocs]    = useState<HistoryDocument[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string | null>(null)
-  const [search,  setSearch]  = useState('')
-  const [selected, setSelected] = useState<HistoryDocument | null>(null)
-  const [downloadingId, setDownloadingId] = useState<number | null>(null)
+  const table = useReactTable({
+    data:    docs,
+    columns,
+    state:   { globalFilter, sorting },
+    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange:      setSorting,
+    globalFilterFn:        'includesString',
+    getCoreRowModel:       getCoreRowModel(),
+    getFilteredRowModel:   getFilteredRowModel(),
+    getSortedRowModel:     getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: { pageSize: PAGE_SIZE, pageIndex: 0 },
+    },
+  })
 
-  // ── Fetch documents ────────────────────────────────────────────────────────
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const token = localStorage.getItem('access_token')
-        const res = await fetch(`${API}/documents/`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          throw new Error((body as { detail?: string }).detail ?? `Server error ${res.status}`)
-        }
-        const data: HistoryDocument[] = await res.json()
-        setDocs(data)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load history')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+  // ── Derived values ─────────────────────────────────────────────────────────
 
-  // ── Filter ─────────────────────────────────────────────────────────────────
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return docs
-    return docs.filter(d => d.filename.toLowerCase().includes(q))
-  }, [docs, search])
+  const { pagination }  = table.getState()
+  const filteredCount   = table.getFilteredRowModel().rows.length
+  const totalPages      = table.getPageCount()
+  const currentPage     = pagination.pageIndex + 1
+  const firstRow        = pagination.pageIndex * pagination.pageSize + 1
+  const lastRow         = Math.min(firstRow + pagination.pageSize - 1, filteredCount)
 
-  // ── Quick download (without opening modal) ─────────────────────────────────
-  async function handleQuickDownload(
-    e: React.MouseEvent,
-    doc: HistoryDocument,
-  ) {
-    e.stopPropagation()
-    if (!doc.report?.report_data) return
-    setDownloadingId(doc.id)
-    try {
-      await generatePdfReport(doc.report.report_data, doc.filename)
-    } finally {
-      setDownloadingId(null)
-    }
-  }
-
-  // ── Stats ──────────────────────────────────────────────────────────────────
-  const completedDocs = docs.filter(d => d.status === 'COMPLETED')
-  const avgScore      = completedDocs.length
+  const completedDocs   = docs.filter(d => d.status === 'COMPLETED')
+  const avgScore        = completedDocs.length
     ? completedDocs.reduce((s, d) => s + (d.report?.global_score ?? 0), 0) / completedDocs.length
     : 0
 
+  // sliding page-button window
+  const pageBtns: number[] = []
+  for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+    pageBtns.push(i)
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className={styles.page}>
       <Navbar />
-
       <main className={styles.main}>
 
-        {/* ── Header ────────────────────────────────────────────────────────── */}
+        {/* ── Header ── */}
         <div className={styles.header}>
           <div className={styles.headerTop}>
-            <div>
+            <div className={styles.titleRow}>
               <h1 className={styles.title}>History</h1>
-              <p className={styles.subtitle}>All documents you've submitted for analysis</p>
+              {!loading && !error && (
+                <span className={styles.titleMeta}>
+                  <span>{docs.length}</span> submissions
+                  {completedDocs.length > 0 && (
+                    <> · avg <span>{avgScore.toFixed(1)}%</span> similarity</>
+                  )}
+                </span>
+              )}
             </div>
 
-            {/* Search */}
             <label className={styles.searchBar}>
               <span className={styles.searchIcon}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
               </span>
               <input
                 className={styles.searchInput}
                 type="text"
                 placeholder="Search by filename…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
+                value={globalFilter}
+                onChange={e => { setGlobalFilter(e.target.value); table.setPageIndex(0) }}
               />
+              {globalFilter && (
+                <button
+                  className={styles.searchClear}
+                  type="button"
+                  onClick={() => { setGlobalFilter(''); table.setPageIndex(0) }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              )}
             </label>
           </div>
         </div>
 
-        {/* ── Stats strip ───────────────────────────────────────────────────── */}
-        {!loading && !error && (
-          <div className={styles.statsStrip}>
-            <div className={styles.statPill}>
-              <span className={styles.statPillVal}>{docs.length}</span> total submissions
-            </div>
-            <div className={styles.statPill}>
-              <span className={styles.statPillVal}>{completedDocs.length}</span> analysed
-            </div>
-            {completedDocs.length > 0 && (
-              <div className={styles.statPill}>
-                avg similarity&nbsp;
-                <span className={styles.statPillVal}>{avgScore.toFixed(1)}%</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Error ─────────────────────────────────────────────────────────── */}
         {error && <div className={styles.errorBanner}>⚠ {error}</div>}
 
-        {/* ── Table ─────────────────────────────────────────────────────────── */}
+        {/* ── Table ── */}
         <div className={styles.tableWrap}>
           <table className={styles.table}>
-            <thead className={styles.tableHead}>
-              <tr>
-                <th>Document</th>
-                <th>Similarity</th>
-                <th>Status</th>
-                <th>Submitted</th>
-                <th style={{ textAlign: 'right' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <SkeletonRows />}
 
-              {!loading && !error && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5}>
-                    <div className={styles.emptyState}>
-                      <div className={styles.emptyIcon}>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                          <polyline points="14 2 14 8 20 8"/>
-                        </svg>
+            {/* Column widths */}
+            <colgroup>
+              <col />                          {/* Document — flexible */}
+              <col style={{ width: '110px' }} /> {/* Similarity */}
+              <col style={{ width: '100px' }} /> {/* Status */}
+              <col style={{ width: '130px' }} /> {/* Submitted */}
+              <col style={{ width: '240px' }} /> {/* Action */}
+            </colgroup>
+
+            <thead className={styles.thead}>
+              {table.getHeaderGroups().map(hg => (
+                <tr key={hg.id}>
+                  {hg.headers.map(header => {
+                    const canSort = header.column.getCanSort()
+                    const sorted  = header.column.getIsSorted()
+                    const align   = (header.column.columnDef.meta as ColumnMeta<HistoryDocument, unknown>)?.align ?? 'left'
+                    return (
+                      <th
+                        key={header.id}
+                        className={[
+                          styles.th,
+                          canSort  ? styles.thSortable : '',
+                          sorted   ? styles.thSorted   : '',
+                          align === 'right'  ? styles.thRight  : '',
+                          align === 'center' ? styles.thCenter : '',
+                        ].filter(Boolean).join(' ')}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        <span className={styles.thInner}>
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {canSort && <SortIcon sorted={sorted} />}
+                        </span>
+                      </th>
+                    )
+                  })}
+                </tr>
+              ))}
+            </thead>
+
+            <tbody className={styles.tbody}>
+              {loading && (
+                // Skeleton rows
+                Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                  <tr key={i} className={styles.skeletonTr}>
+                    <td className={styles.td}>
+                      <div className={styles.skeletonBlock}>
+                        <div className={styles.skeletonLine} style={{ width: `${50 + (i % 4) * 10}%` }} />
+                        <div className={styles.skeletonLine} style={{ width: '80px', marginTop: '6px', height: '8px', opacity: 0.5 }} />
                       </div>
-                      {search ? (
-                        <>
-                          <p className={styles.emptyTitle}>No results for "{search}"</p>
-                          <p className={styles.emptyBody}>Try a different filename.</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className={styles.emptyTitle}>No submissions yet</p>
-                          <p className={styles.emptyBody}>
-                            Upload a document and run an analysis — it will appear here.
-                          </p>
-                          <Link to="/check" className={styles.emptyLink}>Check a document</Link>
-                        </>
+                    </td>
+                    {[80, 70, 90, 160].map((w, j) => (
+                      <td key={j} className={`${styles.td} ${styles.tdRight}`}>
+                        <div className={styles.skeletonLine} style={{ width: `${w}%`, marginLeft: 'auto' }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+
+              {!loading && !error && filteredCount === 0 && (
+                <tr>
+                  <td colSpan={5} className={styles.td}>
+                    <div className={styles.emptyState}>
+                      <p className={styles.emptyTitle}>
+                        {globalFilter ? `No results for "${globalFilter}"` : 'No submissions yet'}
+                      </p>
+                      <p className={styles.emptyBody}>
+                        {globalFilter
+                          ? 'Try a different filename.'
+                          : 'Upload a document and run an analysis — it will appear here.'}
+                      </p>
+                      {!globalFilter && (
+                        <Link to="/check" className={styles.emptyLink}>Check a document →</Link>
                       )}
                     </div>
                   </td>
                 </tr>
               )}
 
-              {!loading && !error && filtered.map(doc => {
-                const score      = doc.report?.global_score ?? null
-                const hasReport  = doc.status === 'COMPLETED' && !!doc.report?.report_data
-                const isDownloading = downloadingId === doc.id
-
+              {!loading && !error && table.getRowModel().rows.map(row => {
+                const doc       = row.original
+                const hasReport = doc.status === 'COMPLETED' && !!doc.report?.report_data
                 return (
                   <tr
-                    key={doc.id}
-                    className={styles.tableRow}
+                    key={row.id}
+                    className={`${styles.tr} ${hasReport ? styles.trClickable : ''}`}
                     onClick={() => hasReport && setSelected(doc)}
-                    title={hasReport ? 'Click to view report details' : undefined}
-                    style={{ cursor: hasReport ? 'pointer' : 'default' }}
                   >
-                    {/* File */}
-                    <td>
-                      <div className={styles.fileCell}>
-                        <FileIcon />
-                        <div>
-                          <div className={styles.fileName}>{doc.filename}</div>
-                          <div className={styles.fileWords}>
-                            {doc.word_count != null
-                              ? `${doc.word_count.toLocaleString()} words`
-                              : 'words unknown'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Similarity score */}
-                    <td>
-                      {score !== null ? (
-                        <span className={`${styles.scoreBadge} ${scoreClass(score)}`}>
-                          <span className={styles.scoreDot} />
-                          {score.toFixed(1)}%
-                        </span>
-                      ) : (
-                        <span style={{ color: '#4b5472', fontSize: 13 }}>—</span>
-                      )}
-                    </td>
-
-                    {/* Status */}
-                    <td>
-                      <span className={`${styles.statusBadge} ${
-                        doc.status === 'COMPLETED' ? styles.statusCompleted :
-                        doc.status === 'FAILED'    ? styles.statusFailed    :
-                        styles.statusPending
-                      }`}>
-                        {doc.status === 'COMPLETED' ? '✓ Done'    :
-                         doc.status === 'FAILED'    ? '✕ Failed'  :
-                         doc.status === 'PROCESSING' ? '⟳ Running' : '· Pending'}
-                      </span>
-                    </td>
-
-                    {/* Date */}
-                    <td>
-                      <span className={styles.dateCell}>{formatDate(doc.uploaded_at)}</span>
-                    </td>
-
-                    {/* Action */}
-                    <td className={styles.actionCell}>
-                      {hasReport && (
-                        <button
-                          className={styles.downloadBtn}
-                          onClick={e => handleQuickDownload(e, doc)}
-                          disabled={isDownloading}
-                          title="Download .docx report"
+                    {row.getVisibleCells().map(cell => {
+                      const align = (cell.column.columnDef.meta as ColumnMeta<HistoryDocument, unknown>)?.align ?? 'left'
+                      return (
+                        <td
+                          key={cell.id}
+                          className={[
+                            styles.td,
+                            align === 'right'  ? styles.tdRight  : '',
+                            align === 'center' ? styles.tdCenter : '',
+                          ].filter(Boolean).join(' ')}
                         >
-                          {isDownloading ? (
-                            <span className={styles.spinner} />
-                          ) : (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                              <polyline points="7 10 12 15 17 10"/>
-                              <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                          )}
-                          {isDownloading ? 'Generating…' : 'Download'}
-                        </button>
-                      )}
-                    </td>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               })}
             </tbody>
           </table>
+
+          {/* ── Pagination ── */}
+          {!loading && !error && filteredCount > 0 && (
+            <div className={styles.pagination}>
+              <span className={styles.pageInfo}>
+                {filteredCount > 0 ? `${firstRow}–${lastRow} of ${filteredCount}` : '0 results'}
+              </span>
+
+              <div className={styles.pageBtns}>
+                <button className={styles.pageNav} title="First"
+                  onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>«</button>
+                <button className={styles.pageNav} title="Previous"
+                  onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>‹</button>
+
+                {pageBtns[0] > 1 && <span className={styles.pageEllipsis}>…</span>}
+                {pageBtns.map(n => (
+                  <button
+                    key={n}
+                    className={`${styles.pageBtn} ${n === currentPage ? styles.pageBtnActive : ''}`}
+                    onClick={() => table.setPageIndex(n - 1)}
+                  >{n}</button>
+                ))}
+                {pageBtns[pageBtns.length - 1] < totalPages && <span className={styles.pageEllipsis}>…</span>}
+
+                <button className={styles.pageNav} title="Next"
+                  onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>›</button>
+                <button className={styles.pageNav} title="Last"
+                  onClick={() => table.setPageIndex(totalPages - 1)} disabled={!table.getCanNextPage()}>»</button>
+              </div>
+
+              <select
+                className={styles.pageSizeSelect}
+                value={pagination.pageSize}
+                onChange={e => { table.setPageSize(Number(e.target.value)); table.setPageIndex(0) }}
+              >
+                {[10, 20, 50].map(n => <option key={n} value={n}>{n} per page</option>)}
+              </select>
+            </div>
+          )}
         </div>
+
       </main>
 
-      {/* ── Report modal ──────────────────────────────────────────────────────── */}
-      {selected && (
-        <ReportModal
-          doc={selected}
-          onClose={() => setSelected(null)}
-        />
-      )}
+      {selected && <ReportModal doc={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

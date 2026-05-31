@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import importlib.util
 import logging
 import os
@@ -89,8 +92,8 @@ async def lifespan(app: FastAPI):
         artifacts_dir=ARTIFACTS_DIR,
         data_dir=DATA_DIR,
         device=DEVICE,
-        max_sources=10,
-        max_matches_per_source=5,
+        max_sources=50,
+        max_matches_per_source=20,
         use_category_routing=False,
         use_per_category_indexes=False,
     )
@@ -131,7 +134,7 @@ class AnalyzeRequest(BaseModel):
     file_path: str          # absolute path to the uploaded PDF/file (shared volume)
     arxiv_id: str | None = None
     threshold: float = 0.75
-    top_k: int = 5
+    top_k: int = 50
     paraphrase_mode: bool = False
 
 

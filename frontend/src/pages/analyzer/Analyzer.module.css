@@ -37,6 +37,14 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  background: rgba(14, 18, 30, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  padding: 32px;
+  backdrop-filter: blur(5px) saturate(145%);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* ── Heading ── */
@@ -88,7 +96,7 @@
 
 .uploadSub {
   font-size: 14px;
-  color: rgba(244, 247, 255, 0.45);
+  color: #b8c1d9;
   line-height: 1.65;
   margin: 0;
   max-width: 46ch;
@@ -97,9 +105,9 @@
 /* ── Drop zone ── */
 
 .dropZone {
-  border: 1.5px dashed rgba(255, 255, 255, 0.14);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1.5px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   transition: border-color 180ms, background 180ms;
   outline: none;
@@ -107,8 +115,8 @@
 }
 
 .dropZone:hover {
-  border-color: rgba(255, 220, 0, 0.4);
-  background: rgba(255, 220, 0, 0.025);
+  border-color: rgba(255, 220, 0, 0.5);
+  background: rgba(255, 220, 0, 0.03);
 }
 
 .dropZoneActive {
@@ -155,7 +163,7 @@
 
 .dropSub {
   font-size: 13px;
-  color: rgba(244, 247, 255, 0.38);
+  color: #8d96b4;
   margin: 0;
 }
 
@@ -173,11 +181,11 @@
 .dropFormats span {
   padding: 3px 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   font-size: 10px;
   font-weight: 700;
-  color: rgba(244, 247, 255, 0.35);
+  color: #8d96b4;
   letter-spacing: 0.06em;
 }
 
@@ -279,7 +287,7 @@
 .uploadNote {
   text-align: center;
   font-size: 12px;
-  color: rgba(244, 247, 255, 0.22);
+  color: #8d96b4;
   margin: 0;
 }
 
@@ -303,9 +311,9 @@
 
 .pipeline {
   padding: 24px 24px 20px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.02);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -433,8 +441,10 @@
   gap: 28px;
   padding: 24px 28px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 18, 30, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(5px) saturate(145%);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .ring {
@@ -543,13 +553,13 @@
   flex-wrap: wrap;
   padding: 12px 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .rdLabel {
   font-size: 12px;
-  color: rgba(244, 247, 255, 0.40);
+  color: #8d96b4;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -564,9 +574,9 @@
 .pill {
   padding: 5px 11px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(244, 247, 255, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #8d96b4;
   font-size: 12px;
   font-weight: 500;
   font-family: inherit;
@@ -576,8 +586,8 @@
 }
 
 .pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #d5def7;
+  background: rgba(255, 255, 255, 0.12);
+  color: #dbe3ff;
 }
 
 .pillActive {
@@ -629,9 +639,12 @@
 /* ── Source table ── */
 
 .sourceTable {
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   overflow: hidden;
+  backdrop-filter: blur(5px) saturate(145%);
+  background: rgba(14, 18, 30, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .sourceTableHead {
@@ -639,11 +652,11 @@
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 10.5px;
   font-weight: 700;
-  color: rgba(244, 247, 255, 0.30);
+  color: #8d96b4;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -757,6 +770,27 @@
   color: rgba(74, 222, 128, 0.60);
   margin: 0;
 }
+
+/* ── View report button ── */
+
+.viewReportBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: #FFD200;
+  border: none;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: opacity 0.15s;
+  margin-top: 4px;
+}
+.viewReportBtn:hover { opacity: 0.88; }
 
 /* ── Reset button ── */
 

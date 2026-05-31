@@ -14,5 +14,11 @@ class UserResponse(UserBase):
     id: int
     created_at: datetime
     is_deleted: bool
-    
+
     model_config = ConfigDict(from_attributes=True)
+
+class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name:  Optional[str] = None
+    current_password: Optional[str] = None
+    new_password:     Optional[str] = None

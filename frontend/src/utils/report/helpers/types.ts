@@ -29,6 +29,8 @@ export interface EngineReport {
   global_plagiarism_score_percent: number
   total_suspicious_sources:        number
   total_reported_sources:          number
+  full_text?:                      string
+  display_text?:                   string
   document_stats: {
     total_words:           number
     total_chunks_analyzed: number
