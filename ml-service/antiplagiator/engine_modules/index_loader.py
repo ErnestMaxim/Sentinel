@@ -24,7 +24,7 @@ def load_global_index(
 
     Raises FileNotFoundError if either file is missing.
     """
-    index_path = artifacts_dir / "faiss_document_index_ondisk.bin"
+    index_path = artifacts_dir / "faiss_document_index.bin"
     metadata_path = artifacts_dir / "faiss_metadata.pkl"
 
     if not index_path.exists():

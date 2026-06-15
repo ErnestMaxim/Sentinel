@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   useReactTable,
@@ -11,7 +11,6 @@ import {
   type SortingState,
   type ColumnMeta,
 } from '@tanstack/react-table'
-import Navbar from '../../components/shared/navbar/Navbar'
 import { formatDate, formatDateTime } from '../../utils/format'
 import type { HistoryDocument } from '../../types/documents'
 import { fetchDocuments, reanalyzeDocument } from './api'
@@ -59,6 +58,9 @@ const colHelper  = createColumnHelper<HistoryDocument>()
 // ── Page component ───────────────────────────────────────────────────────────
 
 export default function HistoryPage() {
+  // useReactTable is flagged as an incompatible library by React Compiler — opt out.
+  "use no memo"
+
   const navigate = useNavigate()
 
   const [docs,          setDocs]          = useState<HistoryDocument[]>([])
@@ -120,7 +122,8 @@ export default function HistoryPage() {
 
   // ── Column definitions ────────────────────────────────────────────────────
 
-  const columns = useMemo(() => [
+  // React Compiler memoizes this automatically — no useMemo needed.
+  const columns = [
     colHelper.accessor('filename', {
       id:       'document',
       header:   'Document',
@@ -199,6 +202,7 @@ export default function HistoryPage() {
           <div className={styles.actionCell}>
             {isCompleted && (
               <button
+                type="button"
                 className={styles.reanalyzeBtn}
                 onClick={e => handleReanalyze(e, doc)}
                 disabled={isReanalyzing}
@@ -210,14 +214,14 @@ export default function HistoryPage() {
             )}
             {hasReport && (
               <>
-                <button className={styles.viewBtn} onClick={e => openReport(e, doc)}>
+                <button type="button" className={styles.viewBtn} onClick={e => openReport(e, doc)}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                     <circle cx="12" cy="12" r="3"/>
                   </svg>
                   View
                 </button>
-                <button className={styles.downloadBtn} onClick={e => downloadReport(e, doc)}>
+                <button type="button" className={styles.downloadBtn} onClick={e => downloadReport(e, doc)}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7 10 12 15 17 10"/>
@@ -231,8 +235,7 @@ export default function HistoryPage() {
         )
       },
     }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [reanalyzingId])
+  ]
 
   // ── Table instance ─────────────────────────────────────────────────────────
 
@@ -276,7 +279,6 @@ export default function HistoryPage() {
 
   return (
     <div className={styles.page}>
-      <Navbar />
       <main className={styles.main}>
 
         {/* ── Header ── */}
@@ -313,6 +315,7 @@ export default function HistoryPage() {
                 <button
                   className={styles.searchClear}
                   type="button"
+                  aria-label="Clear search"
                   onClick={() => { setGlobalFilter(''); table.setPageIndex(0) }}
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -448,29 +451,31 @@ export default function HistoryPage() {
               </span>
 
               <div className={styles.pageBtns}>
-                <button className={styles.pageNav} title="First"
+                <button type="button" className={styles.pageNav} title="First"
                   onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>«</button>
-                <button className={styles.pageNav} title="Previous"
+                <button type="button" className={styles.pageNav} title="Previous"
                   onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>‹</button>
 
                 {pageBtns[0] > 1 && <span className={styles.pageEllipsis}>…</span>}
                 {pageBtns.map(n => (
                   <button
                     key={n}
+                    type="button"
                     className={`${styles.pageBtn} ${n === currentPage ? styles.pageBtnActive : ''}`}
                     onClick={() => table.setPageIndex(n - 1)}
                   >{n}</button>
                 ))}
                 {pageBtns[pageBtns.length - 1] < totalPages && <span className={styles.pageEllipsis}>…</span>}
 
-                <button className={styles.pageNav} title="Next"
+                <button type="button" className={styles.pageNav} title="Next"
                   onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>›</button>
-                <button className={styles.pageNav} title="Last"
+                <button type="button" className={styles.pageNav} title="Last"
                   onClick={() => table.setPageIndex(totalPages - 1)} disabled={!table.getCanNextPage()}>»</button>
               </div>
 
               <select
                 className={styles.pageSizeSelect}
+                aria-label="Rows per page"
                 value={pagination.pageSize}
                 onChange={e => { table.setPageSize(Number(e.target.value)); table.setPageIndex(0) }}
               >

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 import os
 import shutil
 import time
 import traceback
+import uuid
+from pathlib import Path
 from typing import List
 
 import httpx
@@ -20,10 +23,18 @@ from routes.auth import get_current_user
 router = APIRouter(prefix="/documents", tags=["Documents"])
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = os.getenv("ML_SHARED_UPLOAD_DIR", "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+_RAW_UPLOAD_DIR = os.getenv("ML_SHARED_UPLOAD_DIR", "uploads")
+UPLOAD_DIR = Path(_RAW_UPLOAD_DIR).resolve()
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+logger.info("Upload directory resolved to: %s", UPLOAD_DIR)
 
 ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
+
+_MIME_MAP = {
+    ".pdf":  "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".txt":  "text/plain",
+}
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
@@ -34,7 +45,7 @@ def _get_doc_with_report(document_id: int, db: Session) -> Document | None:
         .options(joinedload(Document.report))
         .filter(
             Document.id == document_id,
-            Document.is_deleted == False,  # noqa: E712
+            Document.is_deleted == False,
         )
         .first()
     )
@@ -47,9 +58,14 @@ def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
     payload = {
         "file_path": file_path,
         "arxiv_id": arxiv_id,
-        "threshold": 0.60,
-        "top_k": 50,
-        "paraphrase_mode": False,
+        # 0.50 was far too low: any thematically-related academic paper would
+        # exceed it, producing guaranteed false positives.  0.82 sits between
+        # "highly similar" (0.85) and the semantic neighbourhood that two
+        # papers on the same topic naturally occupy.  The reranker then acts
+        # as a second gate to confirm actual paraphrasing.
+        "threshold": 0.82,
+        "top_k": 10,
+        "paraphrase_mode": True,   # engine falls back gracefully if no reranker is loaded
     }
 
     try:
@@ -94,14 +110,18 @@ def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    file_path = f"{UPLOAD_DIR}/{file.filename}"
-    with open(file_path, "wb") as buffer:
+    stem   = Path(file.filename).stem
+    suffix = Path(file.filename).suffix.lower()
+    safe_name = f"{uuid.uuid4().hex}_{stem}{suffix}"
+
+    dest = UPLOAD_DIR / safe_name
+    with dest.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     new_doc = Document(
         user_id=user_id,
         filename=file.filename,
-        file_path=file_path,
+        file_path=str(dest),
         status=DocumentStatus.PENDING,
     )
     db.add(new_doc)
@@ -113,10 +133,9 @@ def upload_document(
 @router.post("/{document_id}/analyze", response_model=DocumentResponse)
 def analyze_document(
     document_id: int,
-    force: bool = False,   # if True, delete cached report and re-run
+    force: bool = False,
     db: Session = Depends(get_db),
 ):
-
     doc = db.query(Document).filter(
         Document.id == document_id,
         Document.is_deleted == False,
@@ -183,6 +202,7 @@ def analyze_document(
             detail=f"{str(exc)}\n\nTraceback:\n{full_tb}",
         )
 
+
 @router.get("/", response_model=List[DocumentResponse])
 def get_user_documents(
     current_user=Depends(get_current_user),
@@ -201,23 +221,41 @@ def get_user_documents(
     )
     return docs
 
+
 @router.get("/{document_id}/file")
-def get_document_file(document_id: int, db: Session = Depends(get_db)):
-    """Serve the original uploaded file so the frontend can render it."""
+def get_document_file(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Serve the original uploaded file so the frontend PDF viewer can render it."""
     doc = db.query(Document).filter(
         Document.id == document_id,
-        Document.is_deleted == False,  # noqa: E712
+        Document.is_deleted == False,
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    if not os.path.exists(doc.file_path):
+    if doc.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    path = Path(doc.file_path)
+    if not path.exists():
+        logger.error(
+            "File not found on disk for document %d. "
+            "DB has file_path=%r, UPLOAD_DIR=%s",
+            document_id, doc.file_path, UPLOAD_DIR,
+        )
         raise HTTPException(status_code=404, detail="File not found on disk")
+
+    suffix = path.suffix.lower()
+    media_type = _MIME_MAP.get(suffix) or mimetypes.guess_type(doc.filename)[0] or "application/octet-stream"
+
     return FileResponse(
-        doc.file_path,
-        media_type="application/pdf",
+        str(path),
+        media_type=media_type,
         filename=doc.filename,
-        headers={"Access-Control-Allow-Origin": "*"},
     )
+
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: int, db: Session = Depends(get_db)):

@@ -1,6 +1,13 @@
 .field { display: flex; flex-direction: column; gap: 6px; }
 
+/* The <label> wraps both the text span and the child input for implicit association */
 .label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.labelText {
   font-size: 13px;
   font-weight: 600;
   color: #dbe3ff;

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Analyzer.module.css — complete replacement
+   Analyzer — clean, structural, no decorative noise
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Shell ──────────────────────────────────────────────────────────────── */
@@ -7,7 +7,7 @@
 .page {
   display: flex;
   min-height: 100vh;
-  background: #0b0d10;
+  background: #08090e;
   color: #f4f7ff;
   font-family: 'Sora', 'Segoe UI', sans-serif;
 }
@@ -15,13 +15,13 @@
 .main {
   flex: 1;
   margin-left: var(--sidebar-w, 220px);
-  transition: margin-left 420ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: margin-left 400ms cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  padding: 40px 24px 80px;
+  padding: 60px 32px 80px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -30,166 +30,196 @@
 
 .uploadWrap {
   width: 100%;
-  max-width: 560px;
+  max-width: 520px;
 }
 
+/* The card is transparent — structure only, no decoration */
 .uploadCard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  background: rgba(14, 18, 30, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 24px;
-  padding: 32px;
-  backdrop-filter: blur(5px) saturate(145%);
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  gap: 0;
 }
 
-/* ── Heading ── */
+/* ── Heading section ── */
 
 .uploadHeading {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-bottom: 28px;
 }
 
+/* Simple label — no pulsing dots, no glow */
 .uploadBadge {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: rgba(255, 220, 0, 0.08);
-  border: 1px solid rgba(255, 220, 0, 0.20);
-  color: #FFDC00;
+  gap: 6px;
+  color: rgba(255, 220, 0, 0.7);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  width: fit-content;
 }
 
 .badgeDot {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: #FFDC00;
-  box-shadow: 0 0 6px #FFDC00;
-  animation: blink 2s ease infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .uploadTitle {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   color: #f4f7ff;
   margin: 0;
-  line-height: 1.1;
+  line-height: 1.06;
 }
 
 .uploadSub {
   font-size: 14px;
-  color: #b8c1d9;
+  color: rgba(184, 193, 217, 0.65);
   line-height: 1.65;
   margin: 0;
-  max-width: 46ch;
+  max-width: 42ch;
+}
+
+/* Thin rule separating header from interactive area */
+.uploadCard .uploadHeading + * {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 24px;
 }
 
 /* ── Drop zone ── */
 
 .dropZone {
-  border: 1.5px dashed rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
   cursor: pointer;
-  transition: border-color 180ms, background 180ms;
   outline: none;
   overflow: hidden;
+  position: relative;
+  transition: border-color 200ms ease, background 200ms ease;
+  margin-bottom: 12px;
+}
+
+/* Scan beam — sweeps top to bottom on hover/drag */
+.dropZone::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 220, 0, 0.55) 30%,
+    rgba(255, 220, 0, 0.9) 50%,
+    rgba(255, 220, 0, 0.55) 70%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 250ms ease;
+}
+
+.dropZone:hover::before,
+.dropZoneActive::before {
+  opacity: 1;
+  animation: scanBeam 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes scanBeam {
+  0%   { top: 8%; }
+  50%  { top: 92%; }
+  100% { top: 8%; }
 }
 
 .dropZone:hover {
-  border-color: rgba(255, 220, 0, 0.5);
-  background: rgba(255, 220, 0, 0.03);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .dropZoneActive {
-  border-color: #FFDC00 !important;
-  background: rgba(255, 220, 0, 0.05) !important;
-  transform: scale(1.01);
+  border-color: rgba(255, 220, 0, 0.45) !important;
+  background: rgba(255, 220, 0, 0.03) !important;
 }
 
 .dropZoneFile {
-  border-style: solid;
-  border-color: rgba(255, 220, 0, 0.25);
-  background: rgba(255, 220, 0, 0.03);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-/* Empty state */
+/* Empty state — layout: icon small, title large, hints below */
 .dropEmpty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 48px 32px;
+  gap: 5px;
+  padding: 44px 32px;
   text-align: center;
 }
 
+/* Simple icon — no glow box, just the symbol */
 .dropIcon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: rgba(255, 220, 0, 0.08);
-  border: 1px solid rgba(255, 220, 0, 0.18);
-  color: #FFDC00;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 6px;
+  color: rgba(255, 220, 0, 0.55);
+  margin-bottom: 10px;
+  transition: color 200ms ease;
+}
+
+.dropZone:hover .dropIcon {
+  color: rgba(255, 220, 0, 0.8);
 }
 
 .dropTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #f4f7ff;
+  color: #e8eeff;
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .dropSub {
   font-size: 13px;
-  color: #8d96b4;
+  color: rgba(184, 193, 217, 0.5);
   margin: 0;
 }
 
 .dropLink {
-  color: #FFDC00;
+  color: rgba(255, 220, 0, 0.75);
   font-weight: 500;
 }
 
+/* Format tags — text only, no boxes */
 .dropFormats {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .dropFormats span {
-  padding: 3px 10px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
-  color: #8d96b4;
+  color: rgba(184, 193, 217, 0.35);
   letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-/* File selected state */
+.dropFormats span + span::before {
+  content: '·';
+  margin-right: 10px;
+  font-weight: 400;
+}
+
+/* File selected */
 .fileRow {
   display: flex;
   align-items: center;
@@ -199,18 +229,18 @@
 
 .fileExt {
   flex-shrink: 0;
-  width: 42px;
-  height: 46px;
-  border-radius: 10px;
-  background: rgba(255, 220, 0, 0.10);
-  border: 1px solid rgba(255, 220, 0, 0.22);
+  width: 38px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(255, 220, 0, 0.07);
+  border: 1px solid rgba(255, 220, 0, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #FFDC00;
+  letter-spacing: 0.05em;
+  color: rgba(255, 220, 0, 0.7);
 }
 
 .fileDetails {
@@ -228,31 +258,32 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
 .fileSize {
-  font-size: 12px;
-  color: rgba(244, 247, 255, 0.35);
+  font-size: 11.5px;
+  color: rgba(244, 247, 255, 0.3);
 }
 
 .clearBtn {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  color: rgba(244, 247, 255, 0.40);
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(244, 247, 255, 0.3);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 130ms, color 130ms, border-color 130ms;
+  transition: background 150ms, color 150ms, border-color 150ms;
 }
 
 .clearBtn:hover {
-  background: rgba(248, 113, 113, 0.12);
-  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
   color: #f87171;
 }
 
@@ -264,31 +295,36 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 14px 24px;
-  border-radius: 14px;
+  padding: 14px;
+  border-radius: 10px;
   background: #FFDC00;
-  color: #0b0d10;
-  font-size: 15px;
+  color: #08090e;
+  font-size: 14px;
   font-weight: 700;
   font-family: inherit;
+  letter-spacing: -0.01em;
   border: none;
   cursor: pointer;
-  letter-spacing: -0.01em;
-  transition: filter 130ms, transform 130ms, box-shadow 130ms;
-  box-shadow: 0 4px 24px rgba(255, 220, 0, 0.22);
+  transition: opacity 140ms ease, transform 140ms ease;
+  margin-bottom: 12px;
 }
 
 .analyzeBtn:hover {
-  filter: brightness(0.93);
+  opacity: 0.92;
   transform: translateY(-1px);
-  box-shadow: 0 8px 30px rgba(255, 220, 0, 0.32);
+}
+
+.analyzeBtn:active {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .uploadNote {
   text-align: center;
   font-size: 12px;
-  color: #8d96b4;
-  margin: 0;
+  color: rgba(184, 193, 217, 0.38);
+  margin: 4px 0 0;
+  letter-spacing: 0.01em;
 }
 
 /* ── Error ── */
@@ -297,129 +333,173 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 13px 16px;
-  border-radius: 12px;
-  background: rgba(248, 113, 113, 0.07);
-  border: 1px solid rgba(248, 113, 113, 0.18);
-  color: #f87171;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.05);
+  border: 1px solid rgba(248, 113, 113, 0.14);
+  color: rgba(248, 113, 113, 0.85);
   font-size: 13px;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   PIPELINE (analyzing state)
+   PIPELINE — Scanner UI
    ══════════════════════════════════════════════════════════════════════════ */
 
 .pipeline {
-  padding: 24px 24px 20px;
+  position: relative;
+  overflow: hidden;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-top-color: rgba(255, 255, 255, 0.14);
+  background: rgba(9, 11, 18, 0.65);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    0 24px 56px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  margin-bottom: 12px;
 }
+
+/* Scan beam sweeps the whole card top-to-bottom */
+.pipeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 220, 0, 0.4) 25%,
+    rgba(255, 220, 0, 0.75) 50%,
+    rgba(255, 220, 0, 0.4) 75%,
+    transparent 100%
+  );
+  animation: pipelineScan 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  pointer-events: none;
+  z-index: 3;
+}
+
+@keyframes pipelineScan {
+  0%   { top: 0%;   }
+  50%  { top: 100%; }
+  100% { top: 0%;   }
+}
+
+/* ── Header ── */
 
 .pipeHeader {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 9px;
+  padding: 14px 18px 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12.5px;
   font-weight: 600;
-  color: rgba(244, 247, 255, 0.70);
+  color: rgba(244, 247, 255, 0.5);
+  letter-spacing: -0.01em;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .pipeSpinner {
   display: block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 220, 0, 0.2);
-  border-top-color: #FFDC00;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid rgba(255, 220, 0, 0.12);
+  border-top-color: rgba(255, 220, 0, 0.75);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
+
+/* ── Current step display ── */
+
+.pipeStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px 36px;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+/* Step label animates in on each step change (key= triggers remount) */
+.pipeStatusLabel {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #f0f4ff;
+  animation: stepReveal 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes stepReveal {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+.pipeCounter {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(244, 247, 255, 0.25);
+}
+
+/* ── Progress segments ── */
 
 .pipeSteps {
   display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.step {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  gap: 4px;
+  padding: 0 18px 18px;
   position: relative;
+  z-index: 1;
 }
 
-.stepDot {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.03);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.6);
-  margin-top: 8px;
-  transition: border-color 220ms, background 220ms;
+/* Each step is a thin horizontal bar */
+.step {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  transition: background 350ms ease, box-shadow 350ms ease;
 }
 
-.stepDone .stepDot {
-  background: rgba(74, 222, 128, 0.15);
-  border-color: #4ade80;
-  color: #4ade80;
+.stepDone {
+  background: rgba(74, 222, 128, 0.45);
 }
 
-.stepActive .stepDot {
-  background: rgba(255, 220, 0, 0.12);
-  border-color: #FFDC00;
+.stepActive {
+  background: rgba(255, 220, 0, 0.85);
+  animation: segmentPulse 1.6s ease infinite;
 }
 
-.stepPulse {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #FFDC00;
-  animation: blink 1s ease infinite;
+@keyframes segmentPulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.6; }
 }
 
-.stepLine {
-  position: absolute;
-  left: 9px;
-  top: 28px;
-  width: 2px;
-  height: 18px;
-  background: rgba(255, 255, 255, 0.10);
-  border-radius: 1px;
-  transition: background 220ms;
-}
-
-.stepLineDone {
-  background: #4ade80;
-}
-
-.stepLabel {
-  font-size: 13px;
-  color: rgba(244, 247, 255, 0.40);
-  padding: 10px 0 10px;
-  transition: color 220ms;
-}
-
-.stepDone  .stepLabel { color: rgba(244, 247, 255, 0.70); }
-.stepActive .stepLabel { color: #f4f7ff; font-weight: 600; }
+/* ── Footer note ── */
 
 .pipeNote {
-  font-size: 12px;
-  color: rgba(244, 247, 255, 0.25);
-  margin: 0;
+  font-size: 11px;
+  color: rgba(244, 247, 255, 0.16);
   text-align: center;
+  padding: 11px 18px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin: 0;
+  letter-spacing: 0.01em;
 }
+
+/* Keep these classes defined so TSX references don't break */
+.stepDot    { display: none; }
+.stepLine   { display: none; }
+.stepLabel  { display: none; }
+.stepPulse  { display: none; }
+.stepLineDone { display: none; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    DONE VIEW
@@ -430,7 +510,7 @@
   max-width: 680px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* ── Score hero ── */
@@ -440,18 +520,16 @@
   align-items: center;
   gap: 28px;
   padding: 24px 28px;
-  border-radius: 18px;
-  background: rgba(14, 18, 30, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(5px) saturate(145%);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .ring {
   position: relative;
   flex-shrink: 0;
-  width: 128px;
-  height: 128px;
+  width: 120px;
+  height: 120px;
 }
 
 .ringCenter {
@@ -466,67 +544,77 @@
 }
 
 .ringNum {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
 }
 
 .ringLabel {
-  font-size: 10px;
-  color: rgba(244, 247, 255, 0.35);
-  letter-spacing: 0.06em;
+  font-size: 9px;
+  color: rgba(244, 247, 255, 0.28);
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .doneHeadline {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   letter-spacing: -0.025em;
   color: #f4f7ff;
   margin: 0 0 4px;
 }
 
 .doneFilename {
-  font-size: 12px;
-  color: rgba(244, 247, 255, 0.40);
+  font-size: 11.5px;
+  color: rgba(244, 247, 255, 0.3);
   margin: 0 0 2px;
-  font-family: monospace;
+  font-family: 'Courier New', monospace;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 360px;
+  max-width: 380px;
 }
 
 .doneTime {
-  font-size: 11.5px;
-  color: rgba(244, 247, 255, 0.25);
-  margin: 0 0 14px;
+  font-size: 11px;
+  color: rgba(244, 247, 255, 0.2);
+  margin: 0 0 16px;
 }
 
 .doneStats {
   display: flex;
-  gap: 20px;
+  gap: 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .doneStat {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
+  padding: 10px 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.doneStat:last-child {
+  border-right: none;
 }
 
 .doneStatV {
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   color: #f4f7ff;
 }
 
 .doneStatK {
-  font-size: 10.5px;
-  color: rgba(244, 247, 255, 0.35);
+  font-size: 10px;
+  color: rgba(244, 247, 255, 0.28);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 /* ── Download notice ── */
@@ -535,12 +623,12 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 11px 16px;
-  border-radius: 12px;
-  background: rgba(74, 222, 128, 0.07);
-  border: 1px solid rgba(74, 222, 128, 0.18);
-  color: #4ade80;
-  font-size: 13px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: rgba(74, 222, 128, 0.04);
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  color: rgba(74, 222, 128, 0.8);
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -551,86 +639,84 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 12px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .rdLabel {
   font-size: 12px;
-  color: #8d96b4;
+  color: rgba(184, 193, 217, 0.5);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .filterPills {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
   flex-wrap: wrap;
 }
 
 .pill {
-  padding: 5px 11px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.07);
-  color: #8d96b4;
-  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(184, 193, 217, 0.6);
+  font-size: 11.5px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 120ms, color 120ms, border-color 120ms;
+  transition: border-color 140ms, color 140ms, background 140ms;
 }
 
 .pill:hover {
-  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.14);
   color: #dbe3ff;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .pillActive {
-  background: rgba(255, 220, 0, 0.10);
-  border-color: rgba(255, 220, 0, 0.28);
-  color: #FFDC00;
+  background: rgba(255, 220, 0, 0.07);
+  border-color: rgba(255, 220, 0, 0.2);
+  color: rgba(255, 220, 0, 0.85);
 }
 
 .dlBtn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 16px;
-  border-radius: 10px;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
   background: #FFDC00;
-  color: #0b0d10;
-  font-size: 12.5px;
+  color: #08090e;
+  font-size: 12px;
   font-weight: 700;
   font-family: inherit;
   border: none;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: filter 130ms, transform 120ms;
+  transition: opacity 130ms, transform 120ms;
 }
 
 .dlBtn:hover:not(:disabled) {
-  filter: brightness(0.92);
+  opacity: 0.9;
   transform: translateY(-1px);
 }
 
-.dlBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.dlBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 @keyframes dlSpin { to { transform: rotate(360deg); } }
 
 .dlSpin {
   display: block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(11, 13, 16, 0.25);
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid rgba(11, 13, 16, 0.2);
   border-top-color: #0b0d10;
   border-radius: 50%;
   animation: dlSpin 0.7s linear infinite;
@@ -639,12 +725,10 @@
 /* ── Source table ── */
 
 .sourceTable {
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
-  backdrop-filter: blur(5px) saturate(145%);
-  background: rgba(14, 18, 30, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .sourceTableHead {
@@ -652,13 +736,13 @@
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
   font-weight: 700;
-  color: #8d96b4;
+  color: rgba(184, 193, 217, 0.4);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .sourceRow {
@@ -667,41 +751,38 @@
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  animation: fadeUp 0.35s ease both;
+  animation: fadeUp 0.28s ease both;
   transition: background 120ms;
 }
 
 .sourceRow:last-child { border-bottom: none; }
-
-.sourceRow:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
+.sourceRow:hover { background: rgba(255, 255, 255, 0.02); }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 .typePill {
   flex-shrink: 0;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .typePillExact {
-  background: rgba(248, 113, 113, 0.10);
-  border: 1px solid rgba(248, 113, 113, 0.22);
-  color: #f87171;
+  background: rgba(248, 113, 113, 0.07);
+  border: 1px solid rgba(248, 113, 113, 0.16);
+  color: rgba(248, 113, 113, 0.8);
 }
 
 .typePillPara {
-  background: rgba(188, 140, 255, 0.10);
-  border: 1px solid rgba(188, 140, 255, 0.22);
-  color: #bc8cff;
+  background: rgba(188, 140, 255, 0.07);
+  border: 1px solid rgba(188, 140, 255, 0.16);
+  color: rgba(188, 140, 255, 0.8);
 }
 
 .srcInfo {
@@ -714,33 +795,35 @@
 
 .srcTitle {
   font-size: 13px;
-  color: rgba(244, 247, 255, 0.80);
+  color: rgba(244, 247, 255, 0.75);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.005em;
 }
 
 .srcLink {
-  font-size: 11px;
-  color: #6b9fd4;
+  font-size: 10.5px;
+  color: rgba(107, 159, 212, 0.65);
   text-decoration: none;
   width: fit-content;
-  border-bottom: 1px solid rgba(107, 159, 212, 0.28);
+  transition: color 130ms;
 }
 
 .srcLink:hover { color: #93c5fd; }
 
 .srcMatches {
   font-size: 12px;
-  color: rgba(244, 247, 255, 0.35);
+  color: rgba(244, 247, 255, 0.25);
   flex-shrink: 0;
   width: 52px;
   text-align: right;
 }
 
 .srcPct {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   flex-shrink: 0;
   width: 52px;
   text-align: right;
@@ -751,70 +834,69 @@
 .noSources {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 24px;
-  border-radius: 14px;
-  background: rgba(74, 222, 128, 0.05);
-  border: 1px solid rgba(74, 222, 128, 0.16);
+  gap: 14px;
+  padding: 20px;
+  border-radius: 10px;
+  background: rgba(74, 222, 128, 0.03);
+  border: 1px solid rgba(74, 222, 128, 0.12);
 }
 
 .noSourcesTitle {
-  font-size: 14px;
-  font-weight: 700;
-  color: #4ade80;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: rgba(74, 222, 128, 0.85);
   margin: 0 0 2px;
 }
 
 .noSourcesSub {
-  font-size: 13px;
-  color: rgba(74, 222, 128, 0.60);
+  font-size: 12.5px;
+  color: rgba(74, 222, 128, 0.45);
   margin: 0;
 }
 
-/* ── View report button ── */
+/* ── View report / Reset buttons ── */
 
 .viewReportBtn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 10px 20px;
-  border-radius: 10px;
-  background: #FFD200;
+  border-radius: 9px;
+  background: #FFDC00;
   border: none;
-  color: #111827;
+  color: #08090e;
   font-size: 13px;
   font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   align-self: flex-start;
-  transition: opacity 0.15s;
-  margin-top: 4px;
+  letter-spacing: -0.01em;
+  transition: opacity 140ms, transform 140ms;
 }
-.viewReportBtn:hover { opacity: 0.88; }
 
-/* ── Reset button ── */
+.viewReportBtn:hover { opacity: 0.88; transform: translateY(-1px); }
 
 .resetBtn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 9px 18px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  color: rgba(244, 247, 255, 0.55);
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(244, 247, 255, 0.42);
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   align-self: flex-start;
-  transition: background 130ms, color 130ms, border-color 130ms;
+  transition: border-color 140ms, color 140ms, background 140ms;
 }
 
 .resetBtn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #f4f7ff;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(244, 247, 255, 0.75);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -822,16 +904,18 @@
    ══════════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 768px) {
-  .main      { margin-left: 64px; padding: 28px 16px 60px; }
-  .uploadTitle { font-size: 26px; }
-  .doneHero  { flex-direction: column; align-items: flex-start; padding: 20px; }
+  .main      { margin-left: 64px; padding: 32px 20px 60px; }
+  .uploadTitle { font-size: 28px; }
+  .doneHero  { flex-direction: column; align-items: flex-start; padding: 20px; gap: 20px; }
   .ring      { width: 100px; height: 100px; }
   .ringNum   { font-size: 22px; }
 }
 
 @media (max-width: 480px) {
-  .main         { margin-left: 0; }
+  .main            { margin-left: 0; padding: 24px 16px 60px; }
   .sourceTableHead { display: none; }
-  .doneStats    { flex-wrap: wrap; gap: 14px; }
-  .redownloadBar { flex-direction: column; align-items: flex-start; }
+  .doneStats       { flex-direction: column; border-radius: 8px; }
+  .doneStat        { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  .doneStat:last-child { border-bottom: none; }
+  .redownloadBar   { flex-direction: column; align-items: flex-start; }
 }

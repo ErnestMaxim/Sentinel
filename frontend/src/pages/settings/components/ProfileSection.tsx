@@ -38,6 +38,7 @@ export default function ProfileSection({
         <div className={formStyles.fieldRow}>
           <Field label="First name">
             <input
+              aria-label="First name"
               className={formStyles.input}
               value={firstName}
               onChange={e => onFirstName(e.target.value)}
@@ -46,6 +47,7 @@ export default function ProfileSection({
           </Field>
           <Field label="Last name">
             <input
+              aria-label="Last name"
               className={formStyles.input}
               value={lastName}
               onChange={e => onLastName(e.target.value)}
@@ -54,7 +56,7 @@ export default function ProfileSection({
           </Field>
         </div>
         {msg && <p className={msg.ok ? formStyles.msgOk : formStyles.msgErr}>{msg.text}</p>}
-        <button className={formStyles.saveBtn} disabled={saving}>
+        <button type="submit" className={formStyles.saveBtn} disabled={saving}>
           {saving ? 'Saving…' : 'Save changes'}
         </button>
       </form>

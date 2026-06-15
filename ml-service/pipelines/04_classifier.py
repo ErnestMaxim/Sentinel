@@ -1,16 +1,3 @@
-"""
-04_classifier.py — Top-category classifier (updated).
-
-Changes vs original:
-  1. Default model updated to BAAI/bge-m3 (unified with engine + FAISS builder)
-  2. MLP scaled up: (512, 256, 128) — better for 14k+ samples, 19 classes
-  3. compute_sample_weight("balanced") — handles sparse categories gracefully
-  4. Filters classes below MIN_SAMPLES before training — prevents sklearn crash
-     when early_stopping splits produce empty classes
-  5. early_stopping=False — disabled, unstable with highly imbalanced classes
-  6. Evaluates on test split in addition to val
-  7. Saves per-class metrics to a JSON report alongside the artifact
-"""
 from __future__ import annotations
 
 import argparse
@@ -96,7 +83,7 @@ def main() -> None:
         "--test", type=Path,
         default=Path("backend/core/antiplagiator/data/processed/splits/test.jsonl"),
     )
-    parser.add_argument("--model-name", type=str, default="BAAI/bge-m3")
+    parser.add_argument("--model-name", type=str, default="BAAI/bge-base-en-v1.5")
     parser.add_argument("--device",     type=str, default="auto",
                         choices=["auto", "cpu", "cuda"])
     parser.add_argument("--batch-size", type=int, default=32)

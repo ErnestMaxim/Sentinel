@@ -15,7 +15,8 @@ import styles from './PdfViewer.module.css'
 export interface PhraseEntry {
   phrase:    string
   sourceIdx: number
-  isExact:   boolean   // true = exact copy (red), false = paraphrase (purple)
+  /** Severity determines highlight colour: identical=red, highly_similar=amber, paraphrased=purple */
+  severity:  'identical' | 'highly_similar' | 'paraphrased'
 }
 
 interface Props {
@@ -69,10 +70,80 @@ interface TextItem {
  * Uses `viewport.convertToViewportPoint` to map PDF user-space coordinates
  * to canvas pixel coordinates.
  */
-// Highlight colours
-const EXACT_COLOR     = 'rgba(220, 38,  38,  0.38)'   // red
-const PARA_COLOR      = 'rgba(124, 58,  237, 0.30)'   // purple
+// Highlight colours — three severity tiers
+const IDENTICAL_COLOR = 'rgba(220, 38,  38,  0.30)'  // red    – identical (≥ 95%)
+const SIMILAR_COLOR   = 'rgba(217, 119,  6,  0.28)'  // amber  – highly similar (85–95%)
+const PARA_COLOR      = 'rgba(124, 58,  237, 0.22)'  // purple – paraphrased (< 85%)
 
+/**
+ * Unicode Greek → ASCII token table.
+ * Must match the backend's normalize_text_for_fingerprint (normalizer.py).
+ * The backend converts α→ALPHA→alpha; we do the same so PDF.js-extracted
+ * Unicode symbols produce the same tokens as the already-normalised query_text.
+ */
+const GREEK_MAP: [string, string][] = [
+  ['α','alpha'],['β','beta'],['γ','gamma'],['δ','delta'],['ε','epsilon'],
+  ['ζ','zeta'],['η','eta'],['θ','theta'],['ι','iota'],['κ','kappa'],
+  ['λ','lambda'],['μ','mu'],['ν','nu'],['ξ','xi'],['π','pi'],['ρ','rho'],
+  ['σ','sigma'],['τ','tau'],['υ','upsilon'],['φ','phi'],['χ','chi'],
+  ['ψ','psi'],['ω','omega'],
+  ['Γ','gamma'],['Δ','delta'],['Θ','theta'],['Λ','lambda'],['Ξ','xi'],
+  ['Π','pi'],['Σ','sigma'],['Υ','upsilon'],['Φ','phi'],['Ψ','psi'],['Ω','omega'],
+]
+
+/**
+ * Normalise text for paraphrase matching.
+ *
+ * The backend stores query_text after normalize_text_for_fingerprint which:
+ *   – converts Unicode/LaTeX Greek to ASCII tokens (α→alpha, \alpha→alpha)
+ *   – strips remaining LaTeX commands and delimiters
+ *   – lowercases and collapses whitespace
+ *
+ * PDF.js extracts visual text containing Unicode math symbols and plain ASCII.
+ * Applying this function to BOTH sides makes them comparable:
+ *   PDF.js "α"  → "alpha"   ≡  query_text "alpha"  ✓
+ *   PDF.js "R-linear" → "r linear"  ≡  query_text "r linear"  ✓
+ */
+function normForMatch(s: string): string {
+  // 1. Unicode Greek → ASCII tokens (matches backend normalizer step 2)
+  let t = s
+  for (const [ch, tok] of GREEK_MAP) t = t.replaceAll(ch, ` ${tok} `)
+
+  return t
+    // 2. Inline LaTeX $...$ — strip dollar signs, keep content
+    .replace(/\$([^$\n]*)\$/g, (_, inner) =>
+      inner.replace(/\\[a-zA-Z]+\*?/g, ' ').replace(/[{}_^]/g, ' '))
+    // 3. \cmd{inner} → inner
+    .replace(/\\[a-zA-Z]+\*?\s*\{([^}]*)\}/g, ' $1 ')
+    // 4. Standalone LaTeX commands → space
+    .replace(/\\[a-zA-Z]+\*?/g, ' ')
+    // 5. Strip ALL non-alphanumeric (hyphens, parens, commas, brackets, etc.)
+    //    Both sides are reduced to bare word tokens so item-boundary punctuation
+    //    differences can't break the match.
+    .replace(/[^a-zA-Z0-9\s]+/g, ' ')
+    // 6. Collapse whitespace, lowercase
+    .replace(/\s+/g, ' ').toLowerCase().trim()
+}
+
+/**
+ * Draws highlights on `overlayCanvas` for every phrase found in the page's
+ * text content.
+ *
+ * Key design decisions
+ * ────────────────────
+ * 1. Each PDF text item is drawn AT MOST ONCE regardless of how many phrase
+ *    matches cover it.  This prevents opacity accumulation (the "darker red"
+ *    issue where the same sentence gets multiple overlapping rectangles).
+ *
+ * 2. severity='identical' phrases are searched verbatim in the lower-cased raw text.
+ *
+ * 3. severity='highly_similar' and 'paraphrased' phrases carry marker-pdf LaTeX text.
+ *    They are searched in a parallel normalised string built from the same text items,
+ *    using normForMatch() on both sides so the comparison is apples-to-apples.
+ *
+ * 4. Priority:  exact (red) always wins over paraphrase (purple) for any item
+ *    that is claimed by both.
+ */
 function drawHighlights(
   overlayCanvas: HTMLCanvasElement,
   viewport:      any,
@@ -83,54 +154,140 @@ function drawHighlights(
   const ctx = overlayCanvas.getContext('2d')!
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
 
-  // Build full-text string with item offset map
+  // ── Build text strings ─────────────────────────────────────────────────────
+  // fullText  : raw concatenation for exact-phrase search
+  // normFull  : normalised concatenation for paraphrase search
+  // Both track per-item start/end so we can map matches → items.
+
+  interface ItemRange {
+    start:     number   // position in fullText
+    end:       number
+    normStart: number   // position in normFull
+    normEnd:   number
+    item:      TextItem
+  }
+
   let fullText = ''
-  const ranges: { start: number; end: number; item: TextItem }[] = []
+  let normFull = ''
+  const allRanges:  ItemRange[]             = []
+  const rangeByItem = new Map<TextItem, ItemRange>()
+
   for (const item of textItems) {
     if (!item.str) continue
-    ranges.push({ start: fullText.length, end: fullText.length + item.str.length, item })
+    const ns = normForMatch(item.str)
+    const r: ItemRange = {
+      start:     fullText.length,
+      end:       fullText.length + item.str.length,
+      normStart: normFull.length,
+      normEnd:   normFull.length + ns.length,
+      item,
+    }
+    allRanges.push(r)
+    rangeByItem.set(item, r)
     fullText += item.str
+    normFull += ns + ' '  // space separator so word boundaries survive normalisation
   }
   if (!fullText) return new Map()
 
   const lower = fullText.toLowerCase()
 
-  // Find all phrase positions, storing isExact per match
-  interface Match { start: number; end: number; sourceIdx: number; isExact: boolean }
-  const matches: Match[] = []
-  for (const { phrase, sourceIdx, isExact } of phrases) {
-    const ph = phrase.toLowerCase().trim()
-    if (ph.length < 6) continue
-    let pos = 0
-    while (pos < lower.length) {
-      const idx = lower.indexOf(ph, pos)
-      if (idx === -1) break
-      matches.push({ start: idx, end: idx + ph.length, sourceIdx, isExact })
-      pos = idx + ph.length
+  // ── Claim items ───────────────────────────────────────────────────────────
+  // For each phrase match we "claim" the items it covers.
+  // Priority: identical (1) > highly_similar (2) > paraphrased (3)
+
+  const itemClaim = new Map<TextItem, { type: 1 | 2 | 3; sourceIdx: number }>()
+
+  // Priority: identical (1) > highly_similar (2) > paraphrased (3)
+  // A lower number always wins when two phrases contest the same item.
+  const SEVERITY_TYPE = {
+    identical:      1 as const,
+    highly_similar: 2 as const,
+    paraphrased:    3 as const,
+  }
+
+  function claimItemsInRange(
+    rangeStart: number, rangeEnd: number,
+    sourceIdx: number, type: 1 | 2 | 3,
+    useNorm: boolean,
+  ) {
+    for (const r of allRanges) {
+      const rS = useNorm ? r.normStart : r.start
+      const rE = useNorm ? r.normEnd   : r.end
+      if (rE <= rangeStart || rS >= rangeEnd) continue
+      const existing = itemClaim.get(r.item)
+      // Higher-priority type (lower number) always wins
+      if (!existing || type < existing.type) {
+        itemClaim.set(r.item, { type, sourceIdx })
+      }
     }
   }
-  if (matches.length === 0) return new Map()
 
-  // char → sourceIdx map for click detection
-  const charSourceMap = new Map<number, number>()
-  for (const m of matches) {
-    for (let i = m.start; i < m.end; i++) charSourceMap.set(i, m.sourceIdx)
+  for (const { phrase, sourceIdx, severity } of phrases) {
+    const type = SEVERITY_TYPE[severity]
+
+    if (severity === 'identical') {
+      // ── Identical: search verbatim phrases in original (lower-cased) text ─
+      const ph = phrase.toLowerCase().trim()
+      if (ph.length < 6) continue
+      let pos = 0
+      while (pos < lower.length) {
+        const idx = lower.indexOf(ph, pos)
+        if (idx === -1) break
+        claimItemsInRange(idx, idx + ph.length, sourceIdx, type, false)
+        pos = idx + ph.length
+      }
+    } else {
+      // ── Highly similar / Paraphrase: 5-word n-gram regex with \s+ gaps ───
+      // A direct indexOf on a 100-word chunk is too brittle — one item-boundary
+      // space difference anywhere in the chunk breaks the whole match.
+      // Instead we slide a 5-word window (step 3) across the normalised phrase
+      // and look for each n-gram with flexible whitespace between tokens.
+      const normPhrase = normForMatch(phrase)
+      const words = normPhrase.split(' ').filter(w => w.length > 0)
+      if (words.length < 5) continue
+
+      const NGRAM = 5
+      const STEP  = 3
+
+      for (let wi = 0; wi <= words.length - NGRAM; wi += STEP) {
+        const gram = words.slice(wi, wi + NGRAM)
+        // Skip trivial n-grams made mostly of short stop words
+        if (gram.filter(w => w.length > 3).length < 3) continue
+
+        // Build regex: each word separated by one-or-more whitespace chars
+        const re = new RegExp(gram.join('\\s+'), 'g')
+        let m: RegExpExecArray | null
+        while ((m = re.exec(normFull)) !== null) {
+          claimItemsInRange(m.index, m.index + m[0].length, sourceIdx, type, true)
+        }
+      }
+    }
   }
 
-  // Draw highlights — exact = red, paraphrase = purple
-  for (const match of matches) {
-    ctx.fillStyle = match.isExact ? EXACT_COLOR : PARA_COLOR
+  if (itemClaim.size === 0) return new Map()
 
-    for (const range of ranges) {
-      if (range.end <= match.start || range.start >= match.end) continue
+  // ── Draw each claimed item exactly once ────────────────────────────────────
+  const charSourceMap = new Map<number, number>()
 
-      const [a, b, , , tx, ty] = range.item.transform
-      const [cx, cy] = viewport.convertToViewportPoint(tx, ty)
-      const itemW    = Math.abs(range.item.width) * viewport.scale
-      const fontH    = Math.sqrt(a * a + b * b) * viewport.scale
-
-      if (itemW < 1 || fontH < 1) continue
+  for (const [item, { type, sourceIdx }] of itemClaim) {
+    // Draw the highlight rectangle
+    ctx.fillStyle = type === 1 ? IDENTICAL_COLOR
+                  : type === 2 ? SIMILAR_COLOR
+                  :               PARA_COLOR
+    const [a, b, , , tx, ty] = item.transform
+    const [cx, cy] = viewport.convertToViewportPoint(tx, ty)
+    const itemW    = Math.abs(item.width) * viewport.scale
+    const fontH    = Math.sqrt(a * a + b * b) * viewport.scale
+    if (itemW >= 1 && fontH >= 1) {
       ctx.fillRect(cx, cy - fontH, itemW, fontH * 1.25)
+    }
+
+    // Populate click-detection map
+    const r = rangeByItem.get(item)
+    if (r) {
+      for (let c = r.start; c < r.end; c++) {
+        if (!charSourceMap.has(c)) charSourceMap.set(c, sourceIdx)
+      }
     }
   }
 

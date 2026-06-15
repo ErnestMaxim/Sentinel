@@ -1,21 +1,18 @@
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any
 
-class PlagiarismReportBase(BaseModel):
-    global_score: float
-    report_data: dict[str, Any]
-    ai_model_used: str = "allenai/specter"
-    faiss_index_version: str = "v1.0"
-    similarity_threshold: float
-    processing_time_seconds: Optional[float] = None
+from pydantic import BaseModel, ConfigDict
 
-class PlagiarismReportCreate(PlagiarismReportBase):
-    document_id: int
 
-class PlagiarismReportResponse(PlagiarismReportBase):
+class PlagiarismReportResponse(BaseModel):
     id: int
     document_id: int
+    global_score: float
+    report_data: dict[str, Any]
+    ai_model_used: str
+    faiss_index_version: str
+    similarity_threshold: float
+    processing_time_seconds: float | None
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)

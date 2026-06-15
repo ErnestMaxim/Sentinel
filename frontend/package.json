@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@tanstack/react-form-nextjs": "^1.28.6",
     "@tanstack/react-form-remix": "^1.28.6",
     "@tanstack/react-form-start": "^1.28.6",
@@ -17,6 +19,7 @@
     "@types/three": "^0.183.1",
     "docx": "^9.6.1",
     "file-saver": "^2.0.5",
+    "gsap": "^3.15.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.17.0",
     "react": "^19.2.0",

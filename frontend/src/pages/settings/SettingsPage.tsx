@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Navbar       from '../../components/shared/navbar/Navbar'
 import Section      from '../../components/ui/Section'
 import { useAuth }  from '../../context/AuthContext'
 import { patchMe }  from './api'
@@ -13,13 +12,20 @@ import styles from './SettingsPage.module.css'
 type Msg = { ok: boolean; text: string }
 
 export default function SettingsPage() {
+  // try/finally blocks and setState inside the effect prevent React Compiler
+  // from memoizing this component — opt out to suppress the warnings.
+  "use no memo"
+
   const { user, refreshUser, setUserIcon } = useAuth()
   const navigate = useNavigate()
   const icon     = useIconState(setUserIcon)
 
-  // Profile
-  const [firstName,     setFirstName]     = useState('')
-  const [lastName,      setLastName]      = useState('')
+  // Profile — override pattern avoids setState-in-effect for syncing from user.
+  // null override means "show user value"; non-null means "user is editing".
+  const [firstNameOverride, setFirstNameOverride] = useState<string | null>(null)
+  const [lastNameOverride,  setLastNameOverride]  = useState<string | null>(null)
+  const firstName = firstNameOverride ?? user?.firstName ?? ''
+  const lastName  = lastNameOverride  ?? user?.lastName  ?? ''
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMsg,    setProfileMsg]    = useState<Msg | null>(null)
 
@@ -30,20 +36,20 @@ export default function SettingsPage() {
   const [pwSaving,  setPwSaving]  = useState(false)
   const [pwMsg,     setPwMsg]     = useState<Msg | null>(null)
 
-  useEffect(() => {
-    if (user) { setFirstName(user.firstName); setLastName(user.lastName) }
-  }, [user])
-
   async function handleProfileSave(e: React.FormEvent) {
     e.preventDefault()
     setProfileSaving(true); setProfileMsg(null)
     try {
       await patchMe({ first_name: firstName.trim(), last_name: lastName.trim() })
       await refreshUser()
+      // Clear overrides so the refreshed user values take over
+      setFirstNameOverride(null)
+      setLastNameOverride(null)
       setProfileMsg({ ok: true, text: 'Saved.' })
     } catch (err) {
       setProfileMsg({ ok: false, text: err instanceof Error ? err.message : 'Something went wrong' })
-    } finally { setProfileSaving(false) }
+    }
+    setProfileSaving(false)
   }
 
   async function handlePasswordSave(e: React.FormEvent) {
@@ -58,17 +64,18 @@ export default function SettingsPage() {
       setPwMsg({ ok: true, text: 'Password updated.' })
     } catch (err) {
       setPwMsg({ ok: false, text: err instanceof Error ? err.message : 'Something went wrong' })
-    } finally { setPwSaving(false) }
+    }
+    setPwSaving(false)
   }
 
   return (
     <div className={styles.page}>
-      <Navbar />
       <main className={styles.main}>
 
         <div className={styles.header}>
-          <button className={styles.backBtn} onClick={() => navigate(-1)}>← Back</button>
+          <button type="button" className={styles.backBtn} onClick={() => navigate(-1)}>← Back</button>
           <h1 className={styles.title}>Account settings</h1>
+          <p className={styles.titleSub}>Manage your profile, avatar, and security preferences.</p>
         </div>
 
         <div className={styles.sections}>
@@ -79,8 +86,8 @@ export default function SettingsPage() {
           <Section title="Profile" desc="Your name appears in the sidebar and on generated reports.">
             <ProfileSection
               user={user}
-              firstName={firstName}   onFirstName={setFirstName}
-              lastName={lastName}     onLastName={setLastName}
+              firstName={firstName}   onFirstName={v => setFirstNameOverride(v)}
+              lastName={lastName}     onLastName={v => setLastNameOverride(v)}
               saving={profileSaving}  msg={profileMsg}
               onSubmit={handleProfileSave}
             />

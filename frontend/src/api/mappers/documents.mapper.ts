@@ -27,6 +27,7 @@ export function mapEngineMatch(dto: EngineMatchDto): EngineMatch {
     match_percentage:     dto.match_percentage,
     exact_copied_phrases: dto.exact_copied_phrases,
     db_source_type:       dto.db_source_type,
+    severity:             dto.severity,
     detection:            dto.detection,
   }
 }

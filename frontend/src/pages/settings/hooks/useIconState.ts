@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import icon1 from '../../../assets/images/icons/singularity.png'
 import icon2 from '../../../assets/images/icons/oblivion.png'
 import icon3 from '../../../assets/images/icons/eternity.png'
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 export const PRESET_ICONS = [icon1, icon2, icon3] as const
 export type PresetIcon    = typeof PRESET_ICONS[number]
@@ -14,7 +14,7 @@ const LS_CUSTOM = 'sentinel-custom-icon'
 // icon index: 0 = initials | 1-3 = presets | 4 = custom upload
 type IconIdx = 0 | 1 | 2 | 3 | 4
 
-// ── Hook ───────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type IconState = {
   idx:        number
@@ -27,6 +27,8 @@ export type IconState = {
   upload:     (file: File) => void
   remove:     () => void
 }
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useIconState(
   setUserIcon: (url: string | undefined) => void
@@ -43,33 +45,25 @@ export function useIconState(
 
     if (!stored) return
     const presetIdx = PRESET_ICONS.indexOf(stored as PresetIcon)
-    if (presetIdx >= 0)           { setIdx((presetIdx + 1) as IconIdx); return }
-    if (stored === custom && custom) { setIdx(4);                        return }
+    if (presetIdx >= 0)              { setIdx((presetIdx + 1) as IconIdx); return }
+    if (stored === custom && custom) { setIdx(4);                          return }
   }, [])
 
   const total = (customSrc ? 5 : 4) as number
 
-  /** Apply an index, optionally supplying an in-flight custom src */
-  const apply = useCallback((nextIdx: IconIdx, nextCustom?: string) => {
+  function apply(nextIdx: IconIdx, nextCustom?: string) {
     setIdx(nextIdx)
     const src: string | undefined =
       nextIdx === 0 ? undefined :
       nextIdx <= 3  ? PRESET_ICONS[nextIdx - 1] :
       nextCustom ?? customSrc ?? undefined
     setUserIcon(src)
-  }, [customSrc, setUserIcon])
+  }
 
-  const prev = useCallback(
-    () => apply(((idx - 1 + total) % total) as IconIdx),
-    [apply, idx, total]
-  )
+  function prev() { apply(((idx - 1 + total) % total) as IconIdx) }
+  function next() { apply(((idx + 1) % total) as IconIdx) }
 
-  const next = useCallback(
-    () => apply(((idx + 1) % total) as IconIdx),
-    [apply, idx, total]
-  )
-
-  const upload = useCallback((file: File) => {
+  function upload(file: File) {
     const reader = new FileReader()
     reader.onload = ev => {
       const base64 = ev.target?.result as string
@@ -78,13 +72,13 @@ export function useIconState(
       apply(4, base64)
     }
     reader.readAsDataURL(file)
-  }, [apply])
+  }
 
-  const remove = useCallback(() => {
+  function remove() {
     localStorage.removeItem(LS_CUSTOM)
     setCustomSrc(null)
     if (idx === 4) apply(0)
-  }, [apply, idx])
+  }
 
   const currentSrc: string | null =
     idx === 0 ? null :
@@ -93,7 +87,7 @@ export function useIconState(
 
   const label =
     idx === 0 ? 'Initials' :
-    idx <= 3  ? `Icon ${idx}` :
+    idx <= 3  ? `Preset ${idx}` :
     'Custom'
 
   return { idx, total, customSrc, currentSrc, label, prev, next, upload, remove }

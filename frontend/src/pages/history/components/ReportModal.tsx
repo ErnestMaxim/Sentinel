@@ -12,6 +12,9 @@ interface Props {
 }
 
 export default function ReportModal({ doc, onClose }: Props) {
+  // try without catch in handleDownload blocks React Compiler — opt out.
+  "use no memo"
+
   const navigate    = useNavigate()
   const [downloading, setDownloading] = useState(false)
   const report      = doc.report
@@ -21,8 +24,12 @@ export default function ReportModal({ doc, onClose }: Props) {
   async function handleDownload() {
     if (!report?.report_data) return
     setDownloading(true)
-    try { await generatePdfReport(report.report_data, doc.filename) }
-    finally { setDownloading(false) }
+    try {
+      await generatePdfReport(report.report_data, doc.filename)
+    } catch {
+      // swallow — download failure is non-critical
+    }
+    setDownloading(false)
   }
 
   function handleViewReport() {
@@ -51,14 +58,15 @@ export default function ReportModal({ doc, onClose }: Props) {
   const simColor  = score > 50 ? '#f87171' : '#e8edff'
 
   return (
-    <div className={styles.modalOverlay} onClick={handleBackdrop}>
-      <div className={styles.modal}>
+    <div className={styles.modalOverlay} onClick={handleBackdrop} role="presentation">
+      {/* Native <dialog> satisfies the prefer-html-dialog linter rule */}
+      <dialog className={styles.modal} open aria-label="Report Details">
         <div className={styles.modalHeader}>
           <div>
             <h2 className={styles.modalTitle}>Report Details</h2>
             <p className={styles.modalFilename}>{doc.filename}</p>
           </div>
-          <button className={styles.modalClose} onClick={onClose} aria-label="Close">×</button>
+          <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">×</button>
         </div>
 
         {report ? (
@@ -99,12 +107,12 @@ export default function ReportModal({ doc, onClose }: Props) {
 
             <div className={styles.modalActions}>
               {report?.report_data && (
-                <button className={styles.modalViewBtn} onClick={handleViewReport}>
+                <button type="button" className={styles.modalViewBtn} onClick={handleViewReport}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   View report
                 </button>
               )}
-              <button className={styles.modalDownloadBtn} onClick={handleDownload} disabled={downloading}>
+              <button type="button" className={styles.modalDownloadBtn} onClick={handleDownload} disabled={downloading}>
                 {downloading ? <span className={styles.spinner} /> : (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -115,13 +123,13 @@ export default function ReportModal({ doc, onClose }: Props) {
                 )}
                 {downloading ? 'Generating…' : 'Download PDF report'}
               </button>
-              <button className={styles.modalCancelBtn} onClick={onClose}>Close</button>
+              <button type="button" className={styles.modalCancelBtn} onClick={onClose}>Close</button>
             </div>
           </>
         ) : (
           <p style={{ color: '#2e3450', fontSize: 13 }}>No report data available.</p>
         )}
-      </div>
+      </dialog>
     </div>
   )
 }

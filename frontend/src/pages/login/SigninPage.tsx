@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth }    from '../../context/AuthContext'
+import { Link, useNavigate } from 'react-router-dom' // Link used for forgot-password
+import { useAuth } from '../../context/AuthContext'
 import { login, redirectToGoogle } from '../../api/auth'
 import styles from './SigninPage.module.css'
 
@@ -30,14 +30,7 @@ export default function SigninPage() {
   })
 
   return (
-      <div className={styles.authShell}>
-        <div className={styles.topBar}>
-          <nav className={styles.modeSwitch} aria-label="Auth mode">
-            <Link to="/signup" className={styles.modeButton}>Sign up</Link>
-            <button type="button" className={styles.modeButtonActive}>Sign in</button>
-          </nav>
-        </div>
-
+      <>
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.subtitle}>Sign in to continue with Sentinel</p>
 
@@ -105,6 +98,6 @@ export default function SigninPage() {
           </button>
         </div>
         <p className={styles.termsText}>By signing in, you agree to our Terms and Service.</p>
-      </div>
+      </>
   )
 }

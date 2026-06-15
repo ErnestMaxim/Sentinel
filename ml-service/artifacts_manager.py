@@ -9,7 +9,7 @@ LOGGER = logging.getLogger("artifacts_manager")
 REQUIRED_FILES = [
     "faiss_document_index.bin",
     "faiss_metadata.pkl",
-    "category_classifier.pkl",
+    "category_classifier_v2.pkl",
 ]
 
 

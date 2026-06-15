@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import type { EngineReport } from '../../../types/documents'
 import { uploadDocument, analyzeDocument } from '../api'
 import { generatePdfReport } from '../../../utils/report'
@@ -37,7 +37,7 @@ export function useDocumentAnalysis(): AnalysisState {
   const [docInfo,  setDocInfo]  = useState<DocInfo | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
 
-  const acceptFile = useCallback((f: File) => {
+  function acceptFile(f: File) {
     const allowed = ['.pdf', '.docx', '.txt']
     if (!allowed.some(ext => f.name.endsWith(ext))) {
       setErrorMsg('Only PDF, DOCX, or TXT files are supported.')
@@ -45,20 +45,20 @@ export function useDocumentAnalysis(): AnalysisState {
       return
     }
     setFile(f); setStage('idle'); setReport(null); setErrorMsg('')
-  }, [])
+  }
 
-  const reset = useCallback(() => {
+  function reset() {
     setStage('idle'); setReport(null); setFile(null); setErrorMsg('')
-  }, [])
+  }
 
-  const animatePipeline = async () => {
+  async function animatePipeline() {
     for (let i = 1; i <= PIPE_STEPS; i++) {
       await new Promise(r => setTimeout(r, 1100 + Math.random() * 700))
       setPipeStep(i)
     }
   }
 
-  const analyze = useCallback(async () => {
+  async function analyze() {
     if (!file) return
     setReport(null); setErrorMsg(''); setPipeStep(0)
 
@@ -74,7 +74,6 @@ export function useDocumentAnalysis(): AnalysisState {
 
       if (!analyzed.report?.report_data) throw new Error('Engine returned no report data.')
 
-      // Auto-download PDF
       await generatePdfReport(analyzed.report.report_data, analyzed.filename, 'all')
 
       setReport(analyzed.report.report_data)
@@ -89,7 +88,7 @@ export function useDocumentAnalysis(): AnalysisState {
       setErrorMsg(e instanceof Error ? e.message : 'Something went wrong.')
       setStage('error')
     }
-  }, [file])
+  }
 
   return {
     file, dragging, stage, pipeStep, report, docInfo, errorMsg,

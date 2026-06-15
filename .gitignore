@@ -6,3 +6,4 @@
 *.json
 *.pdf
 *__pycache__
+*.cache

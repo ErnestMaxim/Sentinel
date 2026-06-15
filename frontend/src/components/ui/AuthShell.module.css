@@ -24,6 +24,85 @@
   font-family: 'Sora', 'Segoe UI', sans-serif;
 }
 
+/* ── Persistent card (replaces the per-page .authShell wrapper) ── */
+.card {
+  width: min(100%, 420px);
+  justify-self: start;
+  align-self: center;
+  border-radius: 24px;
+  padding: 26px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow:
+    0 32px 80px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  animation: rise-in 260ms ease-out both;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);     }
+}
+
+/* ── Auth mode toggle ─────────────────────────────────────────── */
+.topBar {
+  margin-bottom: 18px;
+}
+
+.modeSwitch {
+  position: relative;
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: fit-content;
+}
+
+/* The sliding indicator — translates via CSS, never jumps */
+.modePill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.modePillRight {
+  transform: translateX(100%);
+}
+
+.modeBtn {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1;
+  cursor: pointer;
+  color: #97a5c8;
+  transition: color 200ms ease;
+  white-space: nowrap;
+}
+
+.modeBtn:hover {
+  color: #d5def7;
+}
+
+.modeBtnActive {
+  color: #fff;
+}
+
 .bgVideo {
   position: absolute;
   inset: 0;

@@ -1,37 +1,89 @@
 .section {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 40px;
-  padding: 28px 32px;
+  grid-template-columns: 240px 1fr;
+  gap: 36px;
+  padding: 26px 28px;
   align-items: start;
-  background: rgba(14, 18, 30, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 20px;
-  backdrop-filter: blur(5px) saturate(145%);
+
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.11);
+  border-radius: 16px;
+
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 32px rgba(0, 0, 0, 0.25);
+
+  transition: border-color 200ms, background 200ms;
+  counter-increment: settings-section;
 }
 
-.meta { padding-top: 4px; }
+.section:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+/* ── Meta column ── */
+
+.meta { padding-top: 2px; }
+
+/* Section number — 01, 02, 03 */
+.meta::before {
+  content: "0" counter(settings-section);
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  color: rgba(255, 220, 0, 0.45);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
 
 .title {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: #f4f7ff;
-  margin: 0 0 8px;
+  color: #f0f4ff;
+  margin: 0 0 7px;
   letter-spacing: -0.01em;
 }
 
 .desc {
-  font-size: 12.5px;
-  color: #8d96b4;
+  font-size: 12px;
+  color: rgba(141, 150, 180, 0.7);
   margin: 0;
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
-.content { display: flex; flex-direction: column; gap: 20px; }
+/* ── Content column ── */
+
+.content { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Responsive ── */
 
 @media (max-width: 960px) {
-  .section { grid-template-columns: 1fr; gap: 20px; padding: 24px; }
+  .section {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 22px 20px;
+  }
+
+  /* Hide the section number on mobile to save space */
+  .meta::before { display: none; }
+}
+
+/* ── Scroll-driven entrance ── */
+@supports (animation-timeline: view()) {
+  .section {
+    animation: sectionIn 0.45s ease both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 30%;
+  }
+
+  @keyframes sectionIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
 }

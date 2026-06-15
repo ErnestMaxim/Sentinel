@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../../context/AuthContext'
 import styles from './Navbar.module.css'
@@ -19,10 +19,32 @@ const SIDEBAR_FULL = 220
 const SIDEBAR_MINI = 64
 
 const NAV_ITEMS = [
-  { label: 'Home',       href: '/home', icon: Home   },
-  { label: 'Check Document', href: '/check',    icon: ScanSearch },
-  { label: 'History',        href: '/history',  icon: History    },
+  { label: 'Home',            href: '/',        icon: Home       },
+  { label: 'Check Document',  href: '/check',   icon: ScanSearch },
+  { label: 'History',         href: '/history', icon: History    },
 ]
+
+// All routes in navigation order for direction detection
+const ROUTE_ORDER: Record<string, number> = {
+  '/': 0, '/check': 1, '/history': 2, '/settings': 3,
+  '/report': 4, '/signin': 5, '/signup': 6,
+  '/forgot-password': 7, '/reset-password': 8,
+}
+
+function setNavDirection(from: string, to: string) {
+  const a = ROUTE_ORDER[from] ?? 0
+  const b = ROUTE_ORDER[to]   ?? 0
+  document.documentElement.dataset.navDir = b >= a ? 'fwd' : 'bwd'
+}
+
+function startPageTransition(callback: () => void) {
+  if ('startViewTransition' in document) {
+    ;(document as Document & { startViewTransition: (cb: () => void) => void })
+      .startViewTransition(callback)
+  } else {
+    callback()
+  }
+}
 
 export default function Navbar() {
   const { pathname } = useLocation()
@@ -44,17 +66,30 @@ export default function Navbar() {
   const handleSignOut = () => {
     signOut()
     setMobileOpen(false)
-    navigate('/signin')
+    setNavDirection(pathname, '/signin')
+    startPageTransition(() => navigate('/signin'))
   }
+
+  // Navigate with a view-transition + direction tracking
+  function handleNavTo(to: string) {
+    setMobileOpen(false)
+    setNavDirection(pathname, to)
+    startPageTransition(() => navigate(to))
+  }
+
+  // Which nav item is active (for the sliding pill)
+  const activeNavIndex = NAV_ITEMS.findIndex(({ href }) => pathname === href)
+  // Pill Y offset: each item is 44px tall + 2px gap = 46px per step
+  const pillY = activeNavIndex >= 0 ? activeNavIndex * 46 : -200
 
   return (
     <>
       {/* ── Mobile top bar ───────────────────── */}
       <header className={styles.mobileBar}>
-        <Link to="/" className={styles.mobileLogo}>
+        <button type="button" className={styles.mobileLogo} onClick={() => handleNavTo('/')}>
           <img src={sentinelLogo} alt="Sentinel" className={styles.mobileLogoImg} />
           <span className={styles.mobileLogoText}>Sentinel</span>
-        </Link>
+        </button>
         <button
           type="button"
           className={styles.hamburger}
@@ -84,9 +119,9 @@ export default function Navbar() {
         {/* Logo + collapse toggle */}
         <div className={styles.logoRow}>
           {!collapsed && (
-            <Link to="/" className={styles.logo} onClick={() => setMobileOpen(false)}>
+            <button type="button" className={styles.logo} onClick={() => handleNavTo('/')}>
               <span className={styles.logoText}>Sentinel</span>
-            </Link>
+            </button>
           )}
           <button
             type="button"
@@ -94,7 +129,7 @@ export default function Navbar() {
             onClick={() => setCollapsed(v => !v)}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+            {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
           </button>
         </div>
 
@@ -102,17 +137,29 @@ export default function Navbar() {
 
         {/* Nav links */}
         <nav className={styles.nav}>
+          {/* Sliding active-state pill */}
+          {activeNavIndex >= 0 && (
+            <div
+              className={[
+                styles.activePill,
+                collapsed ? styles.activePillCollapsed : '',
+              ].join(' ')}
+              style={{ transform: `translateY(${pillY}px)` }}
+              aria-hidden="true"
+            />
+          )}
+
           {NAV_ITEMS.map(({ label, href, icon: Icon }) => (
-            <Link
+            <button
               key={label}
-              to={href}
+              type="button"
               className={[styles.item, pathname === href ? styles.active : ''].join(' ')}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => handleNavTo(href)}
               title={collapsed ? label : undefined}
             >
               <span className={styles.icon}><Icon size={16} /></span>
               {!collapsed && <span className={styles.label}>{label}</span>}
-            </Link>
+            </button>
           ))}
         </nav>
 
@@ -127,10 +174,10 @@ export default function Navbar() {
             </div>
           ) : user ? (
             <>
-              <Link
-                to="/settings"
+              <button
+                type="button"
                 className={styles.userRow}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => handleNavTo('/settings')}
                 title={collapsed ? `${user.firstName} ${user.lastName}` : undefined}
               >
                 <span className={styles.avatar}>
@@ -146,7 +193,7 @@ export default function Navbar() {
                     <span className={styles.userEmail}>{user.email}</span>
                   </div>
                 )}
-              </Link>
+              </button>
 
               <button
                 type="button"
@@ -160,24 +207,24 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Link
-                to="/signin"
+              <button
+                type="button"
                 className={styles.item}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => handleNavTo('/signin')}
                 title={collapsed ? 'Sign in' : undefined}
               >
                 <span className={styles.icon}><LogIn size={16} /></span>
                 {!collapsed && <span className={styles.label}>Sign in</span>}
-              </Link>
+              </button>
 
-              <Link
-                to="/signup"
+              <button
+                type="button"
                 className={[styles.cta, collapsed ? styles.ctaCollapsed : ''].join(' ')}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => handleNavTo('/signup')}
                 title={collapsed ? 'Get started' : undefined}
               >
                 {collapsed ? <UserPlus size={16} /> : 'Get started'}
-              </Link>
+              </button>
             </>
           )}
         </div>

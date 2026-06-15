@@ -25,12 +25,16 @@ logging.basicConfig(
 LOGGER = logging.getLogger("ml-service")
 
 
-HF_TOKEN     = os.getenv("HF_TOKEN")
-HF_REPO_ID   = os.getenv("HF_REPO_ID") 
+HF_TOKEN      = os.getenv("HF_TOKEN")
+HF_REPO_ID    = os.getenv("HF_REPO_ID")
 ARTIFACTS_DIR = Path(os.getenv("ARTIFACTS_DIR", "/data/artifacts"))
 DATA_DIR      = Path(os.getenv("DATA_DIR", "/data/processed"))
 MODEL_NAME    = os.getenv("MODEL_NAME", "BAAI/bge-base-en-v1.5")
 DEVICE        = os.getenv("DEVICE", "auto")
+
+# ── Routing flags (set in .env to enable) ────────────────────────────────────
+USE_CATEGORY_ROUTING      = os.getenv("USE_CATEGORY_ROUTING", "true").lower() == "true"
+USE_PER_CATEGORY_INDEXES  = os.getenv("USE_PER_CATEGORY_INDEXES", "true").lower() == "true"
 
 if not HF_REPO_ID:
     raise RuntimeError("HF_REPO_ID environment variable is required (e.g. myuser/antiplagiator-artifacts)")
@@ -41,18 +45,17 @@ _engine = None
 
 def _load_engine_class():
     """
-    Dynamically load AntiplagiarismEngine from the engine.py that lives
-    alongside this file (copied from backend/core/antiplagiator/).
+    Dynamically load AntiplagiarismEngine from engine.py.
     """
     engine_py = Path(__file__).parent / "antiplagiator" / "engine.py"
     if not engine_py.exists():
         raise FileNotFoundError(
             f"engine.py not found at {engine_py}. "
-            "Make sure you copied backend/core/antiplagiator/ into ml-service/core/antiplagiator/"
+            "Make sure antiplagiator/engine.py exists in ml-service/antiplagiator/"
         )
 
     MODULE_NAME = "antiplagiator_engine"
-    spec = importlib.util.spec_from_file_location(MODULE_NAME, engine_py)
+    spec   = importlib.util.spec_from_file_location(MODULE_NAME, engine_py)
     module = importlib.util.module_from_spec(spec)
     sys.modules[MODULE_NAME] = module
     spec.loader.exec_module(module)
@@ -69,10 +72,12 @@ async def lifespan(app: FastAPI):
 
     LOGGER.info("=" * 60)
     LOGGER.info("ML Service starting up")
-    LOGGER.info("Artifacts dir : %s", ARTIFACTS_DIR)
-    LOGGER.info("HF repo       : %s", HF_REPO_ID)
-    LOGGER.info("Model         : %s", MODEL_NAME)
-    LOGGER.info("Device        : %s", DEVICE)
+    LOGGER.info("Artifacts dir            : %s", ARTIFACTS_DIR)
+    LOGGER.info("HF repo                  : %s", HF_REPO_ID)
+    LOGGER.info("Model                    : %s", MODEL_NAME)
+    LOGGER.info("Device                   : %s", DEVICE)
+    LOGGER.info("Category routing         : %s", USE_CATEGORY_ROUTING)
+    LOGGER.info("Per-category indexes     : %s", USE_PER_CATEGORY_INDEXES)
     LOGGER.info("=" * 60)
 
     # Step 1: ensure artifacts are on disk
@@ -92,19 +97,38 @@ async def lifespan(app: FastAPI):
         artifacts_dir=ARTIFACTS_DIR,
         data_dir=DATA_DIR,
         device=DEVICE,
-        max_sources=50,
+        max_sources=200,
         max_matches_per_source=20,
-        use_category_routing=False,
-        use_per_category_indexes=False,
+        use_category_routing=USE_CATEGORY_ROUTING,
+        use_per_category_indexes=USE_PER_CATEGORY_INDEXES,
     )
 
     elapsed = time.perf_counter() - t0
 
     if not _engine.is_ready:
         LOGGER.error("[engine] Failed to initialise: %s", _engine.init_error)
-        # Don't crash — /health will report not ready
     else:
         LOGGER.info("[engine] Ready in %.1fs", elapsed)
+
+        # Log what routing is active
+        if USE_CATEGORY_ROUTING and _engine.clf is not None:
+            LOGGER.info("[engine] Classifier loaded — %d classes", len(_engine.clf.classes_))
+        else:
+            LOGGER.info("[engine] Category routing disabled or classifier not found")
+
+        remote_url = os.getenv("FAISS_REMOTE_URL", "").strip()
+        if remote_url:
+            LOGGER.info("[engine] Remote Modal index active: %s", remote_url)
+            if USE_PER_CATEGORY_INDEXES:
+                LOGGER.info(
+                    "[engine] Per-category search enabled — "
+                    "will call sentinel-search-category endpoint on Modal"
+                )
+        else:
+            LOGGER.info("[engine] Local FAISS index mode")
+            if USE_PER_CATEGORY_INDEXES:
+                n_cat = len(getattr(_engine, "cat_indexes", {}))
+                LOGGER.info("[engine] %d local category indexes loaded", n_cat)
 
     yield
 
@@ -122,7 +146,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # internal service — locked down at infra level
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -131,15 +155,24 @@ app.add_middleware(
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
-    file_path: str          # absolute path to the uploaded PDF/file (shared volume)
-    arxiv_id: str | None = None
-    threshold: float = 0.75
-    top_k: int = 50
+    file_path:      str
+    arxiv_id:       str | None = None
+    threshold:      float = 0.75
+    top_k:          int   = 50
+    paraphrase_mode: bool = False
+
+
+class AnalyzeTextRequest(BaseModel):
+    text:           str
+    label:          str | None = None   # optional tag (e.g. "eval_10pct_cs")
+    arxiv_id:       str | None = None
+    threshold:      float = 0.75
+    top_k:          int   = 50
     paraphrase_mode: bool = False
 
 
 class AnalyzeResponse(BaseModel):
-    result: dict[str, Any]
+    result:                  dict[str, Any]
     processing_time_seconds: float
 
 
@@ -147,12 +180,24 @@ class AnalyzeResponse(BaseModel):
 
 @app.get("/health")
 def health():
-    """Health check — also reports engine status and artifact info."""
+    """Health check — reports engine status, routing config, and artifact info."""
     ready = _engine is not None and _engine.is_ready
+    routing_info = {}
+    if _engine is not None and _engine.is_ready:
+        routing_info = {
+            "category_routing_enabled": USE_CATEGORY_ROUTING,
+            "per_category_indexes":     USE_PER_CATEGORY_INDEXES,
+            "classifier_loaded":        _engine.clf is not None,
+            "classifier_classes":       (
+                list(_engine.clf.classes_) if _engine.clf is not None else []
+            ),
+            "remote_modal":             bool(os.getenv("FAISS_REMOTE_URL", "").strip()),
+        }
     return {
-        "status": "ready" if ready else "not_ready",
+        "status":       "ready" if ready else "not_ready",
         "engine_error": _engine.init_error if _engine and not _engine.is_ready else None,
-        "artifacts": get_artifacts_info(ARTIFACTS_DIR),
+        "routing":      routing_info,
+        "artifacts":    get_artifacts_info(ARTIFACTS_DIR),
     }
 
 
@@ -171,7 +216,11 @@ def analyze(req: AnalyzeRequest):
             detail=f"File not found on ML service: {req.file_path}",
         )
 
-    LOGGER.info("Analyzing: %s (threshold=%.2f, top_k=%d)", file_path.name, req.threshold, req.top_k)
+    LOGGER.info(
+        "Analyzing: %s (threshold=%.2f, top_k=%d, routing=%s, per_cat=%s)",
+        file_path.name, req.threshold, req.top_k,
+        USE_CATEGORY_ROUTING, USE_PER_CATEGORY_INDEXES,
+    )
 
     t0 = time.perf_counter()
     result = _engine.analyze_document(
@@ -183,51 +232,139 @@ def analyze(req: AnalyzeRequest):
     )
     elapsed = round(time.perf_counter() - t0, 3)
 
-    LOGGER.info("Done in %.2fs — score: %.1f%%",
-                elapsed,
-                result.get("global_plagiarism_score_percent", 0))
+    score = result.get("global_plagiarism_score_percent", 0)
+    alert = result.get("cross_domain_alert", {})
+    LOGGER.info(
+        "Done in %.2fs — score: %.1f%%%s",
+        elapsed, score,
+        " [CROSS-DOMAIN ALERT]" if alert.get("detected") else "",
+    )
 
     return AnalyzeResponse(result=result, processing_time_seconds=elapsed)
+
+
+@app.post("/analyze_text", response_model=AnalyzeResponse)
+def analyze_text(req: AnalyzeTextRequest):
+    """
+    Evaluate endpoint — accepts raw text instead of a file path.
+    Uses mkstemp (safer than NamedTemporaryFile on Windows — no file-lock issues).
+    Intended for automated evaluation scripts (Colab, CI, etc.).
+    """
+    import tempfile, os, traceback as tb
+    if _engine is None or not _engine.is_ready:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Engine not ready: {_engine.init_error if _engine else 'still initialising'}",
+        )
+    if not req.text or not req.text.strip():
+        raise HTTPException(status_code=400, detail="text field is empty")
+
+    # mkstemp returns an open OS-level fd — we close it immediately after
+    # writing so the engine can open the file without any lock conflicts.
+    fd, tmp_name = tempfile.mkstemp(suffix=".txt")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(req.text)
+        # fd is now closed — safe for engine to open on Windows
+    except Exception:
+        os.close(fd)
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+    try:
+        LOGGER.info(
+            "analyze_text: label=%s len=%d threshold=%.2f paraphrase=%s",
+            req.label or "—", len(req.text), req.threshold, req.paraphrase_mode,
+        )
+        t0 = time.perf_counter()
+        result = _engine.analyze_document(
+            tmp_path,
+            threshold=req.threshold,
+            top_k=req.top_k,
+            arxiv_id=req.arxiv_id,
+            paraphrase_mode=req.paraphrase_mode,
+        )
+        elapsed = round(time.perf_counter() - t0, 3)
+        if req.label:
+            result["eval_label"] = req.label
+        LOGGER.info(
+            "analyze_text done in %.2fs — score: %.1f%%",
+            elapsed, result.get("global_plagiarism_score_percent", 0),
+        )
+        return AnalyzeResponse(result=result, processing_time_seconds=elapsed)
+    except Exception as exc:
+        LOGGER.error("analyze_text crashed:\n%s", tb.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+# ── Debug routes ──────────────────────────────────────────────────────────────
 
 @app.get("/debug/category/{arxiv_id}")
 def debug_category(arxiv_id: str):
     """Check what top_category a paper has in the loaded metadata."""
     if _engine is None or not _engine.is_ready:
         raise HTTPException(status_code=503, detail="Engine not ready")
-    
+
     matches = [
         {"chunk_id": m.get("chunk_id"), "top_category": m.get("top_category")}
         for m in _engine.metadata
         if arxiv_id in str(m.get("arxiv_id", ""))
-    ][:5]  # first 5 chunks only
-    
+    ][:5]
+
     return {"arxiv_id": arxiv_id, "sample_metadata": matches}
 
 
 @app.get("/debug/classifier")
 def debug_classifier():
+    """Show what categories the classifier knows about."""
     if _engine is None or not _engine.is_ready:
         raise HTTPException(status_code=503, detail="Engine not ready")
+    if _engine.clf is None:
+        return {"error": "Classifier not loaded (routing disabled or file missing)"}
     return {
-        "classes": list(_engine.clf.classes_),
+        "classes":   list(_engine.clf.classes_),
         "n_classes": len(_engine.clf.classes_),
     }
+
+
+@app.get("/debug/routing")
+def debug_routing():
+    """Show current routing configuration."""
+    if _engine is None or not _engine.is_ready:
+        raise HTTPException(status_code=503, detail="Engine not ready")
+
+    remote_url = os.getenv("FAISS_REMOTE_URL", "").strip()
+    return {
+        "use_category_routing":     USE_CATEGORY_ROUTING,
+        "use_per_category_indexes": USE_PER_CATEGORY_INDEXES,
+        "classifier_loaded":        _engine.clf is not None,
+        "remote_modal_url":         remote_url or None,
+        "local_cat_indexes":        list(getattr(_engine, "cat_indexes", {}).keys()),
+        "options_active": {
+            "option_1_chunk_routing":          USE_CATEGORY_ROUTING and USE_PER_CATEGORY_INDEXES,
+            "option_2_confidence_threshold":   USE_CATEGORY_ROUTING and _engine.clf is not None,
+            "option_3_cross_domain_alert":     USE_CATEGORY_ROUTING and _engine.clf is not None,
+        },
+    }
+
 
 @app.post("/debug/scores")
 def debug_scores(req: AnalyzeRequest):
     """Show raw FAISS scores for the first chunk — helps tune threshold."""
     if _engine is None or not _engine.is_ready:
         raise HTTPException(status_code=503, detail="Engine not ready")
-    
+
     file_path = Path(req.file_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
 
-    chunks = _engine._extractor.read_and_chunk(file_path)
+    chunks, _, _ = _engine._extractor.read_and_chunk(file_path)
     if not chunks:
         return {"error": "No chunks extracted"}
 
-    # Encode just the first chunk and search
     import numpy as np
     first_chunk = chunks[0]
     vec = _engine._model.encode(
@@ -237,20 +374,20 @@ def debug_scores(req: AnalyzeRequest):
     ).astype("float32")
 
     scores, indices = _engine.index.search(vec, 10)
-    
+
     results = []
     for score, idx in zip(scores[0], indices[0]):
         if idx < 0:
             continue
         meta = _engine.metadata[idx] if idx < len(_engine.metadata) else {}
         results.append({
-            "score": round(float(score), 4),
-            "arxiv_id": meta.get("arxiv_id"),
-            "chunk_id": meta.get("chunk_id"),
+            "score":        round(float(score), 4),
+            "arxiv_id":     meta.get("arxiv_id"),
+            "chunk_id":     meta.get("chunk_id"),
             "top_category": meta.get("top_category"),
         })
 
     return {
         "first_chunk_preview": first_chunk[:200],
-        "top_10_raw_scores": results,
+        "top_10_raw_scores":   results,
     }

@@ -1,11 +1,50 @@
 import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { register }     from '../../api/auth'
 import styles from './SignupPage.module.css'
 
 const emailRegex      = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LEN = 8
+
+// ── Field must live at module scope — defining a component inside another
+// component resets its state every render (React creates a new type each time).
+type SignupForm = ReturnType<typeof useForm<{ firstName: string; lastName: string; email: string; password: string }>>
+
+function Field({ form, name, label, type = 'text', autoComplete, placeholder, validate }: {
+  form:          SignupForm
+  name:          'firstName' | 'lastName' | 'email' | 'password'
+  label:         string
+  type?:         string
+  autoComplete?: string
+  placeholder?:  string
+  validate:      (v: string) => string | undefined
+}) {
+  return (
+    <form.Field name={name} validators={{ onChange: ({ value }) => validate(value) }}>
+      {field => {
+        const hasError = field.state.meta.isTouched && field.state.meta.errors.length > 0
+        return (
+          <div className={styles.fieldGroup}>
+            <label htmlFor={field.name} className={styles.label}>{label}</label>
+            <input
+              id={field.name} name={field.name} type={type}
+              autoComplete={autoComplete} placeholder={placeholder}
+              value={field.state.value} onBlur={field.handleBlur}
+              onChange={e => field.handleChange(e.target.value)}
+              className={`${styles.input} ${hasError ? styles.inputError : ''}`}
+            />
+            {hasError && (
+              <small className={styles.errorText}>
+                {field.state.meta.errors.map(String).join(', ')}
+              </small>
+            )}
+          </div>
+        )
+      }}
+    </form.Field>
+  )
+}
 
 export default function SignupPage() {
   const [submitError,   setSubmitError]   = useState<string | null>(null)
@@ -26,59 +65,27 @@ export default function SignupPage() {
     },
   })
 
-  function Field({ name, label, type = 'text', autoComplete, placeholder, validate }: {
-    name: 'firstName' | 'lastName' | 'email' | 'password'
-    label: string; type?: string; autoComplete?: string
-    placeholder?: string; validate: (v: string) => string | undefined
-  }) {
-    return (
-      <form.Field name={name} validators={{ onChange: ({ value }) => validate(value) }}>
-        {field => {
-          const hasError = field.state.meta.isTouched && field.state.meta.errors.length > 0
-          return (
-            <div className={styles.fieldGroup}>
-              <label htmlFor={field.name} className={styles.label}>{label}</label>
-              <input id={field.name} name={field.name} type={type}
-                autoComplete={autoComplete} placeholder={placeholder}
-                value={field.state.value} onBlur={field.handleBlur}
-                onChange={e => field.handleChange(e.target.value)}
-                className={`${styles.input} ${hasError ? styles.inputError : ''}`} />
-              {hasError && <small className={styles.errorText}>{field.state.meta.errors.map(String).join(', ')}</small>}
-            </div>
-          )
-        }}
-      </form.Field>
-    )
-  }
-
   return (
-      <section className={styles.authShell}>
-        <div className={styles.topBar}>
-          <nav className={styles.modeSwitch} aria-label="Auth mode">
-            <button type="button" className={styles.modeButtonActive}>Sign up</button>
-            <Link to="/signin" className={styles.modeButton}>Sign in</Link>
-          </nav>
-        </div>
-
+      <>
         <h1 className={styles.title}>Create your account</h1>
         <p className={styles.subtitle}>Join Sentinel and start checking documents</p>
 
         <form className={styles.form} onSubmit={e => { e.preventDefault(); e.stopPropagation(); form.handleSubmit() }}>
           <div className={styles.nameRow}>
-            <Field name="firstName" label="First name" autoComplete="given-name"
+            <Field form={form} name="firstName" label="First name" autoComplete="given-name"
               placeholder="First name" validate={v => !v.trim() ? 'Required' : undefined} />
-            <Field name="lastName"  label="Last name"  autoComplete="family-name"
+            <Field form={form} name="lastName"  label="Last name"  autoComplete="family-name"
               placeholder="Last name"  validate={v => !v.trim() ? 'Required' : undefined} />
           </div>
 
-          <Field name="email" label="Email" type="email" autoComplete="email"
+          <Field form={form} name="email" label="Email" type="email" autoComplete="email"
             placeholder="Enter your email"
             validate={v => {
               if (!v.trim()) return 'Email is required'
               if (!emailRegex.test(v)) return 'Enter a valid email address'
             }} />
 
-          <Field name="password" label="Password" type="password" autoComplete="new-password"
+          <Field form={form} name="password" label="Password" type="password" autoComplete="new-password"
             placeholder="Create a password"
             validate={v => {
               if (!v.trim()) return 'Password is required'
@@ -96,6 +103,6 @@ export default function SignupPage() {
           {submitError   && <small className={styles.errorText}   role="alert">{submitError}</small>}
           {submitSuccess && <small className={styles.successText} role="status">{submitSuccess}</small>}
         </form>
-      </section>
+      </>
   )
 }

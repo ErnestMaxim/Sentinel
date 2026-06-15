@@ -11,6 +11,7 @@ export interface EngineMatch {
   match_percentage:     number
   exact_copied_phrases: string[]
   db_source_type:       string
+  severity?:            'identical' | 'highly_similar' | 'paraphrased'
   detection?:           'exact' | 'paraphrase'
 }
 
@@ -39,6 +40,7 @@ export interface EngineReport {
     threshold_used:   number
     embedding_model:  string
     category_routing: { enabled: boolean; routed_to: string[] | null }
+    timing?: { total_s: number; [key: string]: number }
   }
   sources: EngineSource[]
 }

@@ -35,7 +35,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 def get_user(user_id: int, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(
         User.id == user_id,
-        User.is_deleted == False,  # noqa: E712
+        User.is_deleted == False,
     ).first()
 
     if db_user is None:

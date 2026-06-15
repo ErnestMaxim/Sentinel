@@ -16,6 +16,9 @@ class RemoteIndex:
     Mimics faiss.Index.search() — sends text chunks to Modal for encoding+search
     and returns (similarities, indices) numpy arrays in exactly the format
     the engine expects from a local FAISS index.
+
+    Also exposes search_category() for Option 1 (per-chunk category routing),
+    which calls the /sentinel-search-category endpoint on Modal.
     """
 
     def __init__(
@@ -30,6 +33,13 @@ class RemoteIndex:
         self._timeout       = timeout
         self._default_top_k = default_top_k
 
+        # Derive the category search URL from the global search URL
+        # Global:   https://workspace--sentinel-search.modal.run
+        # Category: https://workspace--sentinel-search-category.modal.run
+        self._cat_url = self._base_url.replace(
+            "sentinel-search", "sentinel-search-category"
+        )
+
         self._session = requests.Session()
         self._session.headers.update({"Content-Type": "application/json"})
 
@@ -42,6 +52,7 @@ class RemoteIndex:
 
         self.ntotal: int = 0
         LOGGER.info("RemoteIndex -> %s", self._base_url)
+        LOGGER.info("RemoteIndex category URL -> %s", self._cat_url)
         self._ping()
 
     @classmethod
@@ -66,9 +77,10 @@ class RemoteIndex:
             resp.raise_for_status()
             data = resp.json()
             self.ntotal = data.get("total_vectors", 0)
+            cat_indexes = data.get("category_indexes", [])
             LOGGER.info(
-                "Modal server OK — %d vectors, nprobe=%s",
-                self.ntotal, data.get("nprobe"),
+                "Modal server OK — %d vectors, nprobe=%s, %d category indexes",
+                self.ntotal, data.get("nprobe"), len(cat_indexes),
             )
         except Exception as e:
             LOGGER.warning("Modal health check failed: %s — continuing anyway", e)
@@ -80,9 +92,13 @@ class RemoteIndex:
         """
         self._pending_texts = texts
 
+    # ------------------------------------------------------------------
+    # Global search (original — unchanged interface)
+    # ------------------------------------------------------------------
+
     def search(
         self,
-        query_vectors: np.ndarray,   # float32, shape (n_queries, dim) — ignored, we use texts
+        query_vectors: np.ndarray,   # ignored — we use texts sent via set_query_texts
         k: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -97,7 +113,6 @@ class RemoteIndex:
         top_k     = k or self._default_top_k
         n_queries = len(query_vectors)
 
-        # Use the texts set by set_query_texts(), then clear them
         texts = self._pending_texts
         self._pending_texts = []
 
@@ -111,7 +126,7 @@ class RemoteIndex:
         payload: dict[str, Any] = {
             "chunks":     texts,
             "top_k":      top_k,
-            "threshold":  0.0,        # no pre-filter; engine applies its own
+            "threshold":  0.0,
             "api_secret": self._api_secret,
         }
 
@@ -140,9 +155,7 @@ class RemoteIndex:
             LOGGER.error("Modal error: %s", data["error"])
             return self._empty(n_queries, top_k)
 
-        # Modal returns: {"results": [{"chunk_idx": 0, "hits": [{hit}, ...]}, ...]}
         raw_results: list[dict] = data.get("results", [])
-
         sims = np.full((n_queries, top_k), -1.0, dtype="float32")
         idxs = np.full((n_queries, top_k), -1,   dtype="int64")
 
@@ -155,7 +168,6 @@ class RemoteIndex:
                 sims[q, slot] = float(hit.get("similarity", -1.0))
                 idxs[q, slot] = local_idx
 
-        # Log first chunk top hit for debugging
         if raw_results and raw_results[0].get("hits"):
             top = raw_results[0]["hits"][0]
             LOGGER.info(
@@ -165,27 +177,139 @@ class RemoteIndex:
 
         return sims, idxs
 
-    def _register_hit(self, hit: dict) -> int:
-        """Return stable local index for this hit, creating a metadata entry if new."""
-        key = (hit.get("arxiv_id", ""), int(hit.get("chunk_id", 0)))
-        if key not in self._key_to_idx:
-            self._key_to_idx[key] = len(self.metadata)
-            self.metadata.append({
-                "arxiv_id":     hit.get("arxiv_id", ""),
-                "title":        hit.get("title", ""),
-                "chunk_id":     hit.get("chunk_id", 0),
-                "top_category": hit.get("top_category", ""),
-                "source_type":  hit.get("source_type", "unknown"),
-                "text":         hit.get("db_text", ""),
-            })
-        return self._key_to_idx[key]
+    # ------------------------------------------------------------------
+    # Per-category search (Option 1 — chunk-level routing)
+    # ------------------------------------------------------------------
 
-    @staticmethod
-    def _empty(n: int, k: int) -> tuple[np.ndarray, np.ndarray]:
-        return (
-            np.full((n, k), -1.0, dtype="float32"),
-            np.full((n, k), -1,   dtype="int64"),
+    def search_category(
+        self,
+        texts: list[str],
+        category: str,
+        k: int | None = None,
+        threshold: float = 0.0,
+    ) -> tuple[list[list[float]], list[list[dict]]]:
+        """
+        OPTION 1 — Search a specific per-category sub-index on Modal.
+
+        Called by the engine when route_per_chunk() assigns a chunk to a
+        specific category. Returns results in the same format as
+        _search_per_category_parallel() so the existing hit-processing
+        logic works without changes.
+
+        Parameters
+        ----------
+        texts     : the chunk texts for this batch (1 or more chunks)
+        category  : category code e.g. "cs", "math", "astro_ph"
+        k         : top-K hits per chunk
+        threshold : minimum similarity score (applied server-side)
+
+        Returns
+        -------
+        (all_scores, all_metas)
+          all_scores : list[list[float]]  — scores per chunk
+          all_metas  : list[list[dict]]   — metadata dicts per chunk
+        """
+        top_k = k or self._default_top_k
+        n     = len(texts)
+
+        payload: dict[str, Any] = {
+            "chunks":     texts,
+            "category":   category,
+            "top_k":      top_k,
+            "threshold":  threshold,
+            "api_secret": self._api_secret,
+        }
+
+        try:
+            resp = self._session.post(
+                self._cat_url,
+                json=payload,
+                timeout=self._timeout,
+            )
+            resp.raise_for_status()
+        except requests.exceptions.Timeout:
+            # Modal containers cold-start — retry once with 2× timeout
+            retry_timeout = self._timeout * 2
+            LOGGER.warning(
+                "Modal category search timed out (%s) — retrying with %ds timeout",
+                category, retry_timeout,
+            )
+            try:
+                resp = self._session.post(
+                    self._cat_url,
+                    json=payload,
+                    timeout=retry_timeout,
+                )
+                resp.raise_for_status()
+            except requests.exceptions.Timeout:
+                LOGGER.error(
+                    "Modal category search timed out on retry (%s)", category
+                )
+                return [[] for _ in range(n)], [[] for _ in range(n)]
+            except requests.exceptions.RequestException as e2:
+                LOGGER.error(
+                    "Modal category search retry failed (%s): %s", category, e2
+                )
+                return [[] for _ in range(n)], [[] for _ in range(n)]
+        except requests.exceptions.RequestException as e:
+            LOGGER.error("Modal category search failed (%s): %s", category, e)
+            return [[] for _ in range(n)], [[] for _ in range(n)]
+
+        data = resp.json()
+
+        if "error" in data:
+            LOGGER.error("Modal category error (%s): %s", category, data["error"])
+            return [[] for _ in range(n)], [[] for _ in range(n)]
+
+        used_cat = data.get("category", category)
+        LOGGER.info(
+            "Category search: category=%s used=%s timing=%.2fs",
+            category, used_cat, data.get("timing_s", 0),
         )
 
-    def reconstruct_batch(self, *args, **kwargs):
-        raise NotImplementedError("reconstruct_batch not available on RemoteIndex")
+        all_scores: list[list[float]] = [[] for _ in range(n)]
+        all_metas:  list[list[dict]]  = [[] for _ in range(n)]
+
+        for chunk_result in data.get("results", []):
+            q = int(chunk_result.get("chunk_idx", 0))
+            if q >= n:
+                continue
+            for hit in chunk_result.get("hits", []):
+                local_idx = self._register_hit(hit)
+                all_scores[q].append(float(hit.get("similarity", 0.0)))
+                all_metas[q].append(self.metadata[local_idx])
+
+        return all_scores, all_metas
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _register_hit(self, hit: dict) -> int:
+        """Return stable local index for this hit, creating a metadata entry if new."""
+        arxiv_id = str(hit.get("arxiv_id", ""))
+        chunk_id = int(hit.get("chunk_id", -1))
+        key      = (arxiv_id, chunk_id)
+
+        if key in self._key_to_idx:
+            return self._key_to_idx[key]
+
+        meta = {
+            "arxiv_id":     arxiv_id,
+            "chunk_id":     chunk_id,
+            "title":        hit.get("title", "N/A"),
+            "source_type":  hit.get("source_type", "unknown"),
+            "top_category": hit.get("top_category", ""),
+            "text":         hit.get("db_text", ""),
+        }
+        idx = len(self.metadata)
+        self.metadata.append(meta)
+        self._key_to_idx[key] = idx
+        return idx
+
+    def _empty(
+        self, n_queries: int, top_k: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        sims = np.full((n_queries, top_k), -1.0, dtype="float32")
+        idxs = np.full((n_queries, top_k), -1,   dtype="int64")
+        return sims, idxs

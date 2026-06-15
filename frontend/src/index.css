@@ -24,4 +24,46 @@ body {
   min-width: 320px;
   color: #f4f7ff;
   background: #08090e; /* dark fallback — prevents flash on page load */
+  overflow-x: hidden;
+}
+
+/* ── Page Transitions (View Transitions API) ──────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* Forward: old slides left, new enters from right */
+  :root[data-nav-dir="fwd"]::view-transition-old(root) {
+    animation: vt-exit-left 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  :root[data-nav-dir="fwd"]::view-transition-new(root) {
+    animation: vt-enter-right 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* Backward: old slides right, new enters from left */
+  :root[data-nav-dir="bwd"]::view-transition-old(root) {
+    animation: vt-exit-right 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  :root[data-nav-dir="bwd"]::view-transition-new(root) {
+    animation: vt-enter-left 0.38s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* Sidebar stays completely static during transitions */
+  ::view-transition-group(sentinel-sidebar) {
+    animation-duration: 0s !important;
+  }
+}
+
+@keyframes vt-exit-left {
+  from { transform: translateX(0);    opacity: 1; filter: blur(0px); }
+  to   { transform: translateX(-72px); opacity: 0; filter: blur(5px); }
+}
+@keyframes vt-enter-right {
+  from { transform: translateX(72px);  opacity: 0; filter: blur(5px); }
+  to   { transform: translateX(0);    opacity: 1; filter: blur(0px); }
+}
+@keyframes vt-exit-right {
+  from { transform: translateX(0);   opacity: 1; filter: blur(0px); }
+  to   { transform: translateX(72px); opacity: 0; filter: blur(5px); }
+}
+@keyframes vt-enter-left {
+  from { transform: translateX(-72px); opacity: 0; filter: blur(5px); }
+  to   { transform: translateX(0);    opacity: 1; filter: blur(0px); }
 }

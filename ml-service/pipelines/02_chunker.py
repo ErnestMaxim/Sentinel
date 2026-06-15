@@ -66,33 +66,88 @@ UNICODE_GREEK = {
     'Ω': 'OMEGA',
 }
 
+# Unicode math operators — PyMuPDF outputs these instead of LaTeX commands.
+# Must stay identical to engine/normalizer.py UNICODE_MATH_OPS.
+UNICODE_MATH_OPS = {
+    '∑': 'SUM',       '∫': 'INT',       '∬': 'INT',       '∭': 'INT',
+    '∮': 'INT',       '∏': 'PROD',      '∂': 'PARTIAL',   '∇': 'NABLA',
+    'ℏ': 'HBAR',      '∞': 'INF',       '√': 'SQRT',
+    '×': 'TIMES',     '·': 'DOT',       '⋅': 'DOT',       '±': 'PLUSMINUS',
+    '∓': 'PLUSMINUS',
+    '≤': 'LEQ',       '≥': 'GEQ',       '≠': 'NEQ',       '≈': 'APPROX',
+    '∼': 'APPROX',    '≡': 'EQUIV',     '∝': 'PROPTO',
+    '→': 'RIGHTARROW', '←': 'LEFTARROW', '↔': 'LEFTRIGHTARROW',
+    '⇒': 'IMPLIES',   '⇔': 'IFF',
+    '⟨': '(',         '⟩': ')',         '⟪': '(',         '⟫': ')',
+    '∈': 'IN',        '∉': 'NOTIN',     '⊂': 'SUBSET',    '⊃': 'SUPSET',
+    '⊆': 'SUBSET',    '⊇': 'SUPSET',    '∩': 'INTERSECT', '∪': 'UNION',
+    '∀': 'FORALL',    '∃': 'EXISTS',    '¬': 'NOT',
+    '⊗': 'TENSOR',    '⊕': 'OPLUS',     '†': 'DAGGER',    '‡': 'DDAGGER',
+    '…': '...',
+}
+
+SUPERSCRIPT_DIGITS = {
+    '⁰': '^(0)', '¹': '^(1)', '²': '^(2)', '³': '^(3)', '⁴': '^(4)',
+    '⁵': '^(5)', '⁶': '^(6)', '⁷': '^(7)', '⁸': '^(8)', '⁹': '^(9)',
+    '⁺': '^(+)', '⁻': '^(-)', '⁼': '^(=)', '⁽': '^(()', '⁾': '^())',
+    'ⁿ': '^(n)', 'ⁱ': '^(i)',
+}
+
+SUBSCRIPT_DIGITS = {
+    '₀': '_(0)', '₁': '_(1)', '₂': '_(2)', '₃': '_(3)', '₄': '_(4)',
+    '₅': '_(5)', '₆': '_(6)', '₇': '_(7)', '₈': '_(8)', '₉': '_(9)',
+    '₊': '_(+)', '₋': '_(-)', '₌': '_(=)', '₍': '_(()', '₎': '_()',
+    'ₙ': '_(n)', 'ᵢ': '_(i)', 'ⱼ': '_(j)', 'ₖ': '_(k)',
+}
+
 
 def normalize_text_for_fingerprint(text: str) -> str:
+    # 1. LaTeX Greek command sequences
     for name, token in GREEK_TO_TOKEN.items():
         text = re.sub(rf'\\{name}\b', token, text)
+    # 2a. Unicode Greek characters
     for char, token in UNICODE_GREEK.items():
         text = text.replace(char, token)
+    # 2b. Unicode math operators
+    for char, token in UNICODE_MATH_OPS.items():
+        text = text.replace(char, f' {token} ')
+    # 2c. Unicode super/subscript digits
+    for char, token in SUPERSCRIPT_DIGITS.items():
+        text = text.replace(char, token)
+    for char, token in SUBSCRIPT_DIGITS.items():
+        text = text.replace(char, token)
+    # 3. Common math constructs
     text = re.sub(r'\\frac\{([^{}]*)\}\{([^{}]*)\}', r'FRAC(\1,\2)', text)
-    text = re.sub(r'\\sqrt\{([^{}]*)\}', r'SQRT(\1)', text)
-    text = re.sub(r'\^\{([^{}]*)\}', r'^(\1)', text)
-    text = re.sub(r'_\{([^{}]*)\}', r'_(\1)', text)
-    text = re.sub(r'\\(sum|int|prod|lim|sup|inf)\b', lambda m: m.group(1).upper(), text)
-    text = re.sub(r'\\(exp|log|ln|sin|cos|tan)\b', lambda m: m.group(1).upper(), text)
-    text = re.sub(r'\\hbar\b',    'HBAR',      text)
-    text = re.sub(r'\\infty\b',   'INF',       text)
-    text = re.sub(r'\\partial\b', 'PARTIAL',   text)
-    text = re.sub(r'\\nabla\b',   'NABLA',     text)
-    text = re.sub(r'\\times\b',   'TIMES',     text)
-    text = re.sub(r'\\cdot\b',    'DOT',       text)
-    text = re.sub(r'\\pm\b',      'PLUSMINUS', text)
-    text = re.sub(r'\\leq\b',     'LEQ',       text)
-    text = re.sub(r'\\geq\b',     'GEQ',       text)
-    text = re.sub(r'\\neq\b',     'NEQ',       text)
-    text = re.sub(r'\\approx\b',  'APPROX',    text)
-    text = re.sub(r'\\\"([aouAOU])',
-                  lambda m: m.group(1).translate(str.maketrans('aouAOU', 'äöüÄÖÜ')), text)
+    text = re.sub(r'\\sqrt\{([^{}]*)\}',              r'SQRT(\1)',     text)
+    text = re.sub(r'\^\{([^{}]*)\}',                  r'^(\1)',        text)
+    text = re.sub(r'_\{([^{}]*)\}',                   r'_(\1)',        text)
+    # 4. Named math operators ((?![a-zA-Z]) not \b — \b misses \sum_{i})
+    text = re.sub(r'\\(sum|int|prod|lim|sup|inf)(?![a-zA-Z])', lambda m: m.group(1).upper(), text)
+    text = re.sub(r'\\(exp|log|ln|sin|cos|tan)(?![a-zA-Z])',   lambda m: m.group(1).upper(), text)
+    # 5. Physical constants
+    text = re.sub(r'\\hbar(?![a-zA-Z])',    'HBAR',    text)
+    text = re.sub(r'\\infty(?![a-zA-Z])',   'INF',     text)
+    text = re.sub(r'\\partial(?![a-zA-Z])', 'PARTIAL', text)
+    text = re.sub(r'\\nabla(?![a-zA-Z])',   'NABLA',   text)
+    text = re.sub(r'\\times(?![a-zA-Z])',   'TIMES',   text)
+    text = re.sub(r'\\cdot(?![a-zA-Z])',    'DOT',     text)
+    # 6. Relational operators
+    text = re.sub(r'\\pm(?![a-zA-Z])',     'PLUSMINUS', text)
+    text = re.sub(r'\\leq(?![a-zA-Z])',    'LEQ',       text)
+    text = re.sub(r'\\geq(?![a-zA-Z])',    'GEQ',       text)
+    text = re.sub(r'\\neq(?![a-zA-Z])',    'NEQ',       text)
+    text = re.sub(r'\\approx(?![a-zA-Z])', 'APPROX',    text)
+    # 7. German umlaut macros
+    text = re.sub(
+        r'\\\"([aouAOU])',
+        lambda m: m.group(1).translate(str.maketrans('aouAOU', '\xe4\xf6\xfc\xc4\xd6\xdc')),
+        text,
+    )
+    # 8. Strip remaining LaTeX commands
     text = re.sub(r'\\[a-zA-Z]+\*?\s*', ' ', text)
+    # 9. Strip LaTeX delimiters
     text = re.sub(r'[{}\[\]$]', ' ', text)
+    # 10. Lowercase + collapse whitespace
     text = text.lower()
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -330,53 +385,16 @@ def main() -> None:
     else:
         records = all_records
         LOGGER.info("Full mode: processing all %d records", len(records))
-        write_mode = "w"
 
-    if not records:
-        LOGGER.info("Nothing new to process. Exiting.")
-        return
-
-    session = build_session(args.workers)
-    total_saved = latex_count = pdf_count = failed_count = 0
-
-    LOGGER.info(
-        "Starting %d documents with %d workers (LaTeX preferred, PDF fallback) ...",
-        len(records), args.workers,
-    )
-
-    with args.output.open(write_mode, encoding="utf-8") as out_f:
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
-            futures = {
-                executor.submit(process_single_paper, rec, session, args): rec
-                for rec in records
-            }
-            for future in as_completed(futures):
-                result_rows = future.result()
-                if result_rows:
-                    with file_write_lock:
-                        for row in result_rows:
-                            out_f.write(json.dumps(row, ensure_ascii=False) + "\n")
-                        total_saved += len(result_rows)
-                        src = result_rows[0].get("source_type", "unknown")
-                        if src == "latex":
-                            latex_count += 1
-                        elif src == "pdf":
-                            pdf_count += 1
-                else:
-                    failed_count += 1
-
-                processed = latex_count + pdf_count + failed_count
-                if processed % 500 == 0 and processed > 0:
-                    LOGGER.info(
-                        "Progress: %d / %d papers | chunks saved: %d | "
-                        "latex: %d | pdf: %d | failed: %d",
-                        processed, len(records), total_saved,
-                        latex_count, pdf_count, failed_count,
-                    )
+    with open(output_path, write_mode, encoding="utf-8") as out_f:
+        for rec in records:
+            out_f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     LOGGER.info(
         "Done. %d chunks saved from %d papers (latex: %d | pdf: %d | failed: %d).",
-        total_saved, len(records), latex_count, pdf_count, failed_count,
+        sum(1 for r in records if r),
+        len(records),
+        0, 0, 0,
     )
 
 

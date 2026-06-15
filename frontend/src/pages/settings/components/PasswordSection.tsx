@@ -21,6 +21,7 @@ export default function PasswordSection({
     <form onSubmit={onSubmit} className={formStyles.form}>
       <Field label="Current password">
         <input
+          aria-label="Current password"
           className={formStyles.input}
           type="password"
           value={currentPw}
@@ -33,6 +34,7 @@ export default function PasswordSection({
       <div className={formStyles.fieldRow}>
         <Field label="New password">
           <input
+            aria-label="New password"
             className={formStyles.input}
             type="password"
             value={newPw}
@@ -43,6 +45,7 @@ export default function PasswordSection({
         </Field>
         <Field label="Confirm password">
           <input
+            aria-label="Confirm password"
             className={formStyles.input}
             type="password"
             value={confirmPw}
@@ -54,7 +57,7 @@ export default function PasswordSection({
       </div>
 
       {msg && <p className={msg.ok ? formStyles.msgOk : formStyles.msgErr}>{msg.text}</p>}
-      <button className={formStyles.saveBtn} disabled={saving}>
+      <button type="submit" className={formStyles.saveBtn} disabled={saving}>
         {saving ? 'Saving…' : 'Update password'}
       </button>
     </form>

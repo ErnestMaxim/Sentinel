@@ -3,17 +3,17 @@
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
 }
 
 .avatar {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: #FFDC00;
-  color: #0b0d10;
+  background: rgba(255, 220, 0, 0.15);
+  color: #FFDC00;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -21,11 +21,25 @@
   font-weight: 800;
   flex-shrink: 0;
   overflow: hidden;
-  border: 2px solid rgba(255, 220, 0, 0.35);
-  box-shadow: 0 0 0 3px rgba(255, 220, 0, 0.08);
+  border: 1.5px solid rgba(255, 220, 0, 0.2);
 }
 
-.avatarImg { width: 100%; height: 100%; object-fit: cover; }
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-.name  { font-size: 14px; font-weight: 600; color: #f4f7ff; margin: 0 0 3px; }
-.email { font-size: 12px; color: #8d96b4; margin: 0; }
+.name  {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f4ff;
+  margin: 0 0 3px;
+  letter-spacing: -0.01em;
+}
+
+.email {
+  font-size: 11.5px;
+  color: rgba(141, 150, 180, 0.6);
+  margin: 0;
+}

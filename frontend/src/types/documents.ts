@@ -10,6 +10,7 @@ export interface EngineMatch {
   match_percentage:     number
   exact_copied_phrases: string[]
   db_source_type:       string
+  severity?:            'identical' | 'highly_similar' | 'paraphrased'
   detection?:           'exact' | 'paraphrase'
 }
 

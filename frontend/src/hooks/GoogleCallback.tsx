@@ -12,9 +12,7 @@ export default function GoogleCallback() {
 
     if (token) {
       localStorage.setItem('access_token', token)
-
       refreshUser().then(() => {
-    
         navigate('/')
       })
     } else {
@@ -25,7 +23,7 @@ export default function GoogleCallback() {
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '100px' }}>
-      <p>Finalizing sign in...</p>
+      <p>Finalizing sign in…</p>
     </div>
   )
 }

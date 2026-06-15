@@ -1,0 +1,5 @@
+.icon {
+  display: block;
+  flex-shrink: 0;
+  /* All motion is GSAP-driven — no CSS animation here */
+}

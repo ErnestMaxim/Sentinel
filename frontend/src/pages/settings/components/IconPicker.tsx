@@ -25,8 +25,15 @@ export default function IconPicker({ icon, initials }: Props) {
       {/* Controls */}
       <div className={styles.controls}>
         <div className={styles.nav}>
-          <button className={styles.navBtn} onClick={icon.prev} aria-label="Previous icon">←</button>
-          <div className={styles.dots}>
+          <button
+            type="button"
+            className={styles.navBtn}
+            onClick={icon.prev}
+            aria-label="Previous icon"
+          >
+            ←
+          </button>
+          <div className={styles.dots} aria-hidden="true">
             {Array.from({ length: icon.total }).map((_, i) => (
               <span
                 key={i}
@@ -34,23 +41,37 @@ export default function IconPicker({ icon, initials }: Props) {
               />
             ))}
           </div>
-          <button className={styles.navBtn} onClick={icon.next} aria-label="Next icon">→</button>
+          <button
+            type="button"
+            className={styles.navBtn}
+            onClick={icon.next}
+            aria-label="Next icon"
+          >
+            →
+          </button>
         </div>
 
+        {/* Hidden file input — triggered by the button below; not directly reachable */}
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
+          aria-hidden="true"
+          tabIndex={-1}
           style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) icon.upload(f) }}
         />
-        <button className={styles.uploadBtn} onClick={() => fileRef.current?.click()}>
-          <Upload size={13} />
+        <button
+          type="button"
+          className={styles.uploadBtn}
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload size={13} aria-hidden="true" />
           Upload photo
         </button>
 
         {icon.customSrc && (
-          <button className={styles.removeBtn} onClick={icon.remove}>
+          <button type="button" className={styles.removeBtn} onClick={icon.remove}>
             Remove custom photo
           </button>
         )}

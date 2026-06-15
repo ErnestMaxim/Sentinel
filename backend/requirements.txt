@@ -1,6 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.0
+pydantic-settings==2.5.2
 email-validator==2.2.0
 
 # Database
@@ -11,12 +12,11 @@ alembic==1.13.3
 # Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.2.0
+bcrypt==4.0.1
 python-multipart==0.0.12
 
-# HTTP — Google OAuth + calling ml-service
+# HTTP
 httpx==0.27.0
-requests==2.32.3
 
 # Env
 python-dotenv==1.0.1

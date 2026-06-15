@@ -3,7 +3,7 @@
 .page {
   display: flex;
   min-height: 100vh;
-  background: #080a10;
+  background: #08090e;
   color: #e8edff;
   font-family: 'Sora', 'Segoe UI', sans-serif;
 }
@@ -11,38 +11,51 @@
 .main {
   flex: 1;
   margin-left: var(--sidebar-w, 220px);
-  padding: 52px 72px 100px;
-  transition: margin-left 420ms cubic-bezier(0.4, 0, 0.2, 1);
-  max-width: 900px;
+  padding: 52px 56px 100px;
+  transition: margin-left 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
 
-.header { margin-bottom: 32px; }
+.header {
+  margin-bottom: 40px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
 
 .backBtn {
-  background: none;
-  border: none;
-  color: #8d96b4;
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  padding: 0;
-  margin-bottom: 14px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: color 120ms ease;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: rgba(184, 193, 217, 0.5);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 18px;
   letter-spacing: 0.01em;
+  transition: color 140ms;
 }
-.backBtn:hover { color: #dbe3ff; }
+
+.backBtn:hover { color: rgba(184, 193, 217, 0.9); }
 
 .title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #f4f7ff;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: #f0f4ff;
+  margin: 0 0 6px;
+}
+
+.titleSub {
+  font-size: 13.5px;
+  color: rgba(184, 193, 217, 0.45);
   margin: 0;
+  font-weight: 400;
 }
 
 /* ── Sections wrapper ────────────────────────────────────────────────────── */
@@ -50,91 +63,88 @@
 .sections {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  counter-reset: settings-section;
 }
 
-/* ── Icon area (used by IconPicker) ──────────────────────────────────────── */
-
-.iconArea {
-  display: flex;
-  align-items: center;
-  gap: 36px;
-  flex-wrap: wrap;
-}
-
-/* ── Form ────────────────────────────────────────────────────────────────── */
+/* ── Form elements ───────────────────────────────────────────────────────── */
 
 .form { display: flex; flex-direction: column; gap: 16px; }
 
 .fieldRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 12px;
 }
-
-/* ── Inputs — identical to auth form ────────────────────────────────────── */
 
 .input {
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
   color: #eef3ff;
-  padding: 12px 14px;
+  padding: 11px 14px;
   outline: none;
   font-size: 14px;
   font-family: inherit;
   box-sizing: border-box;
-  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
-.input::placeholder { color: #8d96b4; }
+.input::placeholder { color: rgba(141, 150, 180, 0.6); }
 
 .input:focus {
-  border-color: rgba(255, 233, 111, 0.75);
-  box-shadow: 0 0 0 3px rgba(255, 230, 90, 0.2);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 220, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 220, 0, 0.10);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ── Messages ────────────────────────────────────────────────────────────── */
 
-.msgOk  { font-size: 12.5px; color: #4ade80; margin: 0; }
-.msgErr { font-size: 12.5px; color: #f87171; margin: 0; }
+.msgOk  { font-size: 12.5px; color: rgba(74, 222, 128, 0.85); margin: 0; }
+.msgErr { font-size: 12.5px; color: rgba(248, 113, 113, 0.85); margin: 0; }
 
-/* ── Save / Update button — identical to auth form submit ────────────────── */
+/* ── Save button — golden, consistent with the app accent ────────────────── */
 
 .saveBtn {
   align-self: flex-start;
-  padding: 12px 24px;
-  border-radius: 12px;
-  background: #f4f6fb;
+  padding: 11px 22px;
+  border-radius: 10px;
+  background: #FFDC00;
   border: none;
-  color: #131723;
-  font-size: 14px;
+  color: #08090e;
+  font-size: 13.5px;
   font-weight: 700;
   font-family: inherit;
+  letter-spacing: -0.01em;
   cursor: pointer;
-  transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 
 .saveBtn:hover:not(:disabled) {
+  opacity: 0.9;
   transform: translateY(-1px);
-  filter: brightness(0.96);
 }
 
 .saveBtn:disabled {
-  opacity: 0.55;
+  opacity: 0.45;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 
+@media (max-width: 1100px) {
+  .main     { padding: 48px 36px 80px; }
+}
+
 @media (max-width: 960px) {
-  .main { padding: 52px 32px 80px; max-width: 100%; }
+  .main     { padding: 48px 28px 80px; }
   .fieldRow { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
-  .main { margin-left: 0; padding: 80px 20px 60px; }
+  .main     { margin-left: 0; padding: 80px 20px 60px; }
   .fieldRow { grid-template-columns: 1fr; }
 }

@@ -2,19 +2,24 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# System deps — libpq for psycopg2, gcc for compilation, curl for healthcheck
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install dependencies before copying code
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy source
 COPY . .
 
-RUN mkdir -p uploads
-
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/ || exit 1
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

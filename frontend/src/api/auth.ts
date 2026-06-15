@@ -102,5 +102,5 @@ export async function patchMe(payload: {
 }
 
 export function redirectToGoogle(): void {
-  window.location.href = `${API}/auth/google`
+  window.location.href = `${API}/auth/google/login`
 }

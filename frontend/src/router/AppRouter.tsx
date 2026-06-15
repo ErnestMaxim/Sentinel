@@ -9,10 +9,10 @@ import ResetPasswordPage  from '../pages/reset-password/ResetPasswordPage'
 import HistoryPage        from '../pages/history/HistoryPage'
 import SettingsPage       from '../pages/settings/SettingsPage'
 import AuthShell          from '../components/ui/AuthShell'
+import AppLayout          from '../components/ui/AppLayout'
 import ReportPage         from '../pages/report/ReportPage'
 
-// Layout route: AuthShell mounts once and stays alive while navigating
-// between any auth page — the video never restarts.
+// Auth layout: AuthShell mounts once while navigating between auth pages
 function AuthLayout() {
   return (
     <AuthShell>
@@ -24,22 +24,26 @@ function AuthLayout() {
 export default function AppRouter() {
   return (
     <Routes>
-      <Route path="/"              element={<HomePage />} />
-      <Route path="/auth/callback" element={<GoogleCallback />} />
-      <Route path="/check"         element={<AnalyzerPage />} />
-      <Route path="/report"        element={<ReportPage />} />
-      <Route path="/history"       element={<HistoryPage />} />
-      <Route path="/settings"      element={<SettingsPage />} />
+      {/* ── Main app — Navbar lives here, survives all route swaps ── */}
+      <Route element={<AppLayout />}>
+        <Route path="/"         element={<HomePage />} />
+        <Route path="/check"    element={<AnalyzerPage />} />
+        <Route path="/report"   element={<ReportPage />} />
+        <Route path="/history"  element={<HistoryPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="*"         element={<HomePage />} />
+      </Route>
 
-      {/* Auth layout route — shell persists, only Outlet content swaps */}
+      {/* ── OAuth callback (no chrome needed) ── */}
+      <Route path="/oauth-callback" element={<GoogleCallback />} />
+
+      {/* ── Auth pages — AuthShell persists, only Outlet content swaps ── */}
       <Route element={<AuthLayout />}>
         <Route path="/signin"          element={<SigninPage />} />
         <Route path="/signup"          element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
       </Route>
-
-      <Route path="*" element={<HomePage />} />
     </Routes>
   )
 }

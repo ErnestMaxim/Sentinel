@@ -1,10 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import Optional
-
-# Import the Enum directly from your models
 from models import DocumentStatus
-# Import the separated schema for nesting
 from schemas.plagiarism import PlagiarismReportResponse 
 
 class DocumentBase(BaseModel):
@@ -22,7 +19,6 @@ class DocumentResponse(DocumentBase):
     user_id: int
     uploaded_at: datetime
     is_deleted: bool
-    # We can nest the separated report schema here
     report: Optional[PlagiarismReportResponse] = None 
     
     model_config = ConfigDict(from_attributes=True)
