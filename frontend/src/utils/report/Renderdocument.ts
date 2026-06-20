@@ -10,7 +10,7 @@ import {
   LINE_H, ML, MR, MT, PH, PW,
 } from './helpers/constants'
 import { pageFooter, pageHeader } from './layout'
-import { addPage, currentPage, fillRect, fillRounded, wrap } from './primitives'
+import { addPage, currentPage, wrap } from './primitives'
 import type { EngineReport, ReportFilter } from './helpers/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,10 +72,6 @@ function spanAt(charPos: number, spans: Span[]): number {
 
 function highlightBg(span: Span) {
   return span.isExact ? C.redBg : C.purpleBg
-}
-
-function highlightBorder(span: Span) {
-  return span.isExact ? C.red : C.purple
 }
 
 // ── Legend ────────────────────────────────────────────────────────────────────

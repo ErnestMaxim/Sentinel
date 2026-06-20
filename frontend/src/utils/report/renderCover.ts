@@ -1,5 +1,3 @@
-// ── renderCover.ts ────────────────────────────────────────────────────────────
-
 import jsPDF from 'jspdf'
 import {
   C, CW, FONT_BODY, FONT_TINY, FONT_SMALL, FONT_SUB, FONT_TITLE,
@@ -7,7 +5,7 @@ import {
   scoreColor, scoreBgColor, scoreMutedColor,
 } from './helpers/constants'
 import { pageFooter, pageHeader } from './layout'
-import { fillRect, fillRounded, strokeRounded, wrap } from './primitives'
+import { fillRounded, strokeRounded, wrap } from './primitives'
 import type { EngineReport, ReportFilter } from './helpers/types'
 
 export function renderCover(

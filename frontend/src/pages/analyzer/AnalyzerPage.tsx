@@ -6,7 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { generatePdfReport, type ReportFilter } from '../../utils/report'
 import { useDocumentAnalysis } from './hooks/useDocumentAnalysis'
 import ScoreRing from './components/ScoreRing'
-import MorphIcon, { type MorphPhase } from '../../components/ui/MorphIcon'
+import MorphIcon from '../../components/ui/MorphIcon'
 import MagneticButton from '../../components/ui/MagneticButton'
 import { useTilt } from '../../hooks/useTilt'
 import styles from './Analyzer.module.css'
@@ -24,9 +24,6 @@ const STEPS = [
 ]
  
 export default function AnalyzerPage() {
-  // useTilt accesses refs via contextSafe; handleReDownload has try/finally
-  // without catch — React Compiler can't optimize this component, opt out.
-  "use no memo"
 
   const navigate       = useNavigate()
   const analysis       = useDocumentAnalysis()
@@ -36,19 +33,8 @@ export default function AnalyzerPage() {
   const [downloading,  setDownloading]  = useState(false)
   const [reportFilter, setReportFilter] = useState<ReportFilter>('all')
 
-  // 3-D tilt on the upload card
   const tilt = useTilt<HTMLDivElement>(8)
 
-  // Derive the icon phase from analysis state
-  const morphPhase: MorphPhase = (() => {
-    if (analysis.stage === 'error')     return 'error'
-    if (analysis.stage === 'done')      return 'done'
-    if (analysis.stage === 'uploading') return 'uploading'
-    if (analysis.stage === 'analyzing') return 'analyzing'
-    return 'idle'
-  })()
-
-  // Animate source rows in when the done view mounts
   useGSAP(() => {
     if (analysis.stage !== 'done') return
     const rows = sourceListRef.current?.querySelectorAll('[data-source-row]')

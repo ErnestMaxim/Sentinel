@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Section      from '../../components/ui/Section'
 import { useAuth }  from '../../context/AuthContext'
@@ -12,16 +12,10 @@ import styles from './SettingsPage.module.css'
 type Msg = { ok: boolean; text: string }
 
 export default function SettingsPage() {
-  // try/finally blocks and setState inside the effect prevent React Compiler
-  // from memoizing this component — opt out to suppress the warnings.
-  "use no memo"
-
   const { user, refreshUser, setUserIcon } = useAuth()
   const navigate = useNavigate()
   const icon     = useIconState(setUserIcon)
 
-  // Profile — override pattern avoids setState-in-effect for syncing from user.
-  // null override means "show user value"; non-null means "user is editing".
   const [firstNameOverride, setFirstNameOverride] = useState<string | null>(null)
   const [lastNameOverride,  setLastNameOverride]  = useState<string | null>(null)
   const firstName = firstNameOverride ?? user?.firstName ?? ''
@@ -42,7 +36,6 @@ export default function SettingsPage() {
     try {
       await patchMe({ first_name: firstName.trim(), last_name: lastName.trim() })
       await refreshUser()
-      // Clear overrides so the refreshed user values take over
       setFirstNameOverride(null)
       setLastNameOverride(null)
       setProfileMsg({ ok: true, text: 'Saved.' })

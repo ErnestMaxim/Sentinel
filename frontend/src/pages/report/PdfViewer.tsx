@@ -294,12 +294,11 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
                 const my   = (e.clientY - rect.top)  * (H / rect.height)
 
                 let bestSourceIdx = -1
-                let bestDist      = Infinity
 
                 let charOffset = 0
                 for (const item of textItems) {
                   if (!item.str) continue
-                  const [a, b, c, d, tx, ty] = item.transform
+                  const [a, b, tx, ty] = item.transform
                   const [cx, cy] = viewport.convertToViewportPoint(tx, ty)
                   const fontH    = Math.sqrt(a * a + b * b) * viewport.scale
                   const itemW    = Math.abs(item.width) * viewport.scale
@@ -308,7 +307,6 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
                     for (let i = charOffset; i < charOffset + item.str.length; i++) {
                       if (charSourceMap.has(i)) {
                         bestSourceIdx = charSourceMap.get(i)!
-                        bestDist      = 0
                         break
                       }
                     }

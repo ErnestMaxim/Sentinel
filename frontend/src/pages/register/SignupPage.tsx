@@ -1,18 +1,14 @@
 import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { useNavigate } from 'react-router-dom'
-import { register }     from '../../api/auth'
+import { register } from '../../api/auth'
 import styles from './SignupPage.module.css'
 
-const emailRegex      = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const emailRegex       = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LEN = 8
 
-// ── Field must live at module scope — defining a component inside another
-// component resets its state every render (React creates a new type each time).
-type SignupForm = ReturnType<typeof useForm<{ firstName: string; lastName: string; email: string; password: string }>>
-
 function Field({ form, name, label, type = 'text', autoComplete, placeholder, validate }: {
-  form:          SignupForm
+  form:          any
   name:          'firstName' | 'lastName' | 'email' | 'password'
   label:         string
   type?:         string
@@ -21,24 +17,18 @@ function Field({ form, name, label, type = 'text', autoComplete, placeholder, va
   validate:      (v: string) => string | undefined
 }) {
   return (
-    <form.Field name={name} validators={{ onChange: ({ value }) => validate(value) }}>
-      {field => {
+    <form.Field name={name} validators={{ onChange: ({ value }: { value: string }) => validate(value) }}>
+      {(field: any) => {
         const hasError = field.state.meta.isTouched && field.state.meta.errors.length > 0
         return (
           <div className={styles.fieldGroup}>
             <label htmlFor={field.name} className={styles.label}>{label}</label>
-            <input
-              id={field.name} name={field.name} type={type}
+            <input id={field.name} name={field.name} type={type}
               autoComplete={autoComplete} placeholder={placeholder}
               value={field.state.value} onBlur={field.handleBlur}
-              onChange={e => field.handleChange(e.target.value)}
-              className={`${styles.input} ${hasError ? styles.inputError : ''}`}
-            />
-            {hasError && (
-              <small className={styles.errorText}>
-                {field.state.meta.errors.map(String).join(', ')}
-              </small>
-            )}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => field.handleChange(e.target.value)}
+              className={`${styles.input} ${hasError ? styles.inputError : ''}`} />
+            {hasError && <small className={styles.errorText}>{field.state.meta.errors.map(String).join(', ')}</small>}
           </div>
         )
       }}
