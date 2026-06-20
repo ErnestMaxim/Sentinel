@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Optional
 from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,11 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────────────
-    user: str
-    password: str
-    host: str
-    port: str
-    dbname: str
+    database_url: Optional[str] = None  # preferred — full URL
+    user:     str = ""
+    password: str = ""
+    host:     str = ""
+    port:     str = "5432"
+    dbname:   str = ""
 
     # ── Auth ──────────────────────────────────────────────────────────────────
     jwt_secret_key: str
@@ -40,13 +42,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
-    def database_url(self) -> str:
+    def db_url(self) -> str:
+        if self.database_url:
+            return self.database_url
         return (
             f"postgresql+psycopg2://{self.user}:{quote_plus(self.password)}"
             f"@{self.host}:{self.port}/{self.dbname}?sslmode=require"
         )
-
-
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
