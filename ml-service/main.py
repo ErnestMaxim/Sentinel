@@ -155,7 +155,7 @@ app.add_middleware(
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class AnalyzeRequest(BaseModel):
-    file_path:      str
+    file_url:       str
     arxiv_id:       str | None = None
     threshold:      float = 0.75
     top_k:          int   = 50
@@ -202,45 +202,56 @@ def health():
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest):
+async def analyze(req: AnalyzeRequest):
+    import httpx, tempfile, os
+
     if _engine is None or not _engine.is_ready:
         raise HTTPException(
             status_code=503,
             detail=f"Engine not ready: {_engine.init_error if _engine else 'still initialising'}",
         )
 
-    file_path = Path(req.file_path)
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"File not found on ML service: {req.file_path}",
+    # Download file from signed URL
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.get(req.file_url)
+        resp.raise_for_status()
+
+    # Save to temp file
+    fd, tmp_name = tempfile.mkstemp(suffix=".pdf")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(resp.content)
+    except Exception:
+        os.close(fd)
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+    try:
+        LOGGER.info(
+            "Analyzing from URL (threshold=%.2f, top_k=%d, routing=%s, per_cat=%s)",
+            req.threshold, req.top_k, USE_CATEGORY_ROUTING, USE_PER_CATEGORY_INDEXES,
         )
+        t0 = time.perf_counter()
+        result = _engine.analyze_document(
+            tmp_path,
+            threshold=req.threshold,
+            top_k=req.top_k,
+            arxiv_id=req.arxiv_id,
+            paraphrase_mode=req.paraphrase_mode,
+        )
+        elapsed = round(time.perf_counter() - t0, 3)
 
-    LOGGER.info(
-        "Analyzing: %s (threshold=%.2f, top_k=%d, routing=%s, per_cat=%s)",
-        file_path.name, req.threshold, req.top_k,
-        USE_CATEGORY_ROUTING, USE_PER_CATEGORY_INDEXES,
-    )
-
-    t0 = time.perf_counter()
-    result = _engine.analyze_document(
-        file_path,
-        threshold=req.threshold,
-        top_k=req.top_k,
-        arxiv_id=req.arxiv_id,
-        paraphrase_mode=req.paraphrase_mode,
-    )
-    elapsed = round(time.perf_counter() - t0, 3)
-
-    score = result.get("global_plagiarism_score_percent", 0)
-    alert = result.get("cross_domain_alert", {})
-    LOGGER.info(
-        "Done in %.2fs — score: %.1f%%%s",
-        elapsed, score,
-        " [CROSS-DOMAIN ALERT]" if alert.get("detected") else "",
-    )
-
-    return AnalyzeResponse(result=result, processing_time_seconds=elapsed)
+        score = result.get("global_plagiarism_score_percent", 0)
+        alert = result.get("cross_domain_alert", {})
+        LOGGER.info(
+            "Done in %.2fs — score: %.1f%%%s",
+            elapsed, score,
+            " [CROSS-DOMAIN ALERT]" if alert.get("detected") else "",
+        )
+        return AnalyzeResponse(result=result, processing_time_seconds=elapsed)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 @app.post("/analyze_text", response_model=AnalyzeResponse)
@@ -350,44 +361,6 @@ def debug_routing():
         },
     }
 
-
 @app.post("/debug/scores")
 def debug_scores(req: AnalyzeRequest):
-    """Show raw FAISS scores for the first chunk — helps tune threshold."""
-    if _engine is None or not _engine.is_ready:
-        raise HTTPException(status_code=503, detail="Engine not ready")
-
-    file_path = Path(req.file_path)
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
-
-    chunks, _, _ = _engine._extractor.read_and_chunk(file_path)
-    if not chunks:
-        return {"error": "No chunks extracted"}
-
-    import numpy as np
-    first_chunk = chunks[0]
-    vec = _engine._model.encode(
-        [first_chunk],
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-    ).astype("float32")
-
-    scores, indices = _engine.index.search(vec, 10)
-
-    results = []
-    for score, idx in zip(scores[0], indices[0]):
-        if idx < 0:
-            continue
-        meta = _engine.metadata[idx] if idx < len(_engine.metadata) else {}
-        results.append({
-            "score":        round(float(score), 4),
-            "arxiv_id":     meta.get("arxiv_id"),
-            "chunk_id":     meta.get("chunk_id"),
-            "top_category": meta.get("top_category"),
-        })
-
-    return {
-        "first_chunk_preview": first_chunk[:200],
-        "top_10_raw_scores":   results,
-    }
+    raise HTTPException(status_code=501, detail="debug/scores not available in remote index mode — files are URL-based")

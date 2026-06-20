@@ -14,7 +14,7 @@ import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
-
+from utils.storage import upload_file, get_signed_url, download_file
 from database import get_db
 from models import Document, DocumentStatus, PlagiarismReport
 from schemas.documents import DocumentResponse
@@ -53,19 +53,14 @@ def _get_doc_with_report(document_id: int, db: Session) -> Document | None:
 
 # ── ML service caller ─────────────────────────────────────────────────────────
 
-def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
+def _call_ml_service(file_url: str, arxiv_id: str | None = None) -> dict:
     """Call the ML microservice to run plagiarism analysis."""
     payload = {
-        "file_path": file_path,
+        "file_url": file_url,
         "arxiv_id": arxiv_id,
-        # 0.50 was far too low: any thematically-related academic paper would
-        # exceed it, producing guaranteed false positives.  0.82 sits between
-        # "highly similar" (0.85) and the semantic neighbourhood that two
-        # papers on the same topic naturally occupy.  The reranker then acts
-        # as a second gate to confirm actual paraphrasing.
         "threshold": 0.82,
         "top_k": 10,
-        "paraphrase_mode": True,   # engine falls back gracefully if no reranker is loaded
+        "paraphrase_mode": True,
     }
 
     try:
@@ -105,30 +100,32 @@ def _call_ml_service(file_path: str, arxiv_id: str | None = None) -> dict:
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
-def upload_document(
+async def upload_document(
     user_id: int = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    stem   = Path(file.filename).stem
-    suffix = Path(file.filename).suffix.lower()
-    safe_name = f"{uuid.uuid4().hex}_{stem}{suffix}"
-
-    dest = UPLOAD_DIR / safe_name
-    with dest.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    suffix    = Path(file.filename).suffix.lower()
+    safe_name = f"{uuid.uuid4().hex}{suffix}"
+    file_bytes = await file.read()
 
     new_doc = Document(
         user_id=user_id,
         filename=file.filename,
-        file_path=str(dest),
+        file_path="",
         status=DocumentStatus.PENDING,
     )
     db.add(new_doc)
     db.commit()
     db.refresh(new_doc)
-    return new_doc
 
+    storage_path = f"{new_doc.id}/{safe_name}"
+    upload_file(storage_path, file_bytes)
+
+    new_doc.file_path = storage_path
+    db.commit()
+    db.refresh(new_doc)
+    return new_doc
 
 @router.post("/{document_id}/analyze", response_model=DocumentResponse)
 def analyze_document(
@@ -159,7 +156,8 @@ def analyze_document(
         logger.info("Sending to ML service: %s", doc.file_path)
 
         t0 = time.perf_counter()
-        ml_response = _call_ml_service(file_path=doc.file_path)
+        signed_url  = get_signed_url(doc.file_path, expires_in=3600)
+        ml_response = _call_ml_service(file_url=signed_url)
         elapsed = time.perf_counter() - t0
 
         result = ml_response["result"]
@@ -228,7 +226,7 @@ def get_document_file(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Serve the original uploaded file so the frontend PDF viewer can render it."""
+    from fastapi.responses import Response
     doc = db.query(Document).filter(
         Document.id == document_id,
         Document.is_deleted == False,
@@ -238,22 +236,11 @@ def get_document_file(
     if doc.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    path = Path(doc.file_path)
-    if not path.exists():
-        logger.error(
-            "File not found on disk for document %d. "
-            "DB has file_path=%r, UPLOAD_DIR=%s",
-            document_id, doc.file_path, UPLOAD_DIR,
-        )
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
-    suffix = path.suffix.lower()
-    media_type = _MIME_MAP.get(suffix) or mimetypes.guess_type(doc.filename)[0] or "application/octet-stream"
-
-    return FileResponse(
-        str(path),
-        media_type=media_type,
-        filename=doc.filename,
+    file_bytes = download_file(doc.file_path)
+    return Response(
+        content=file_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={doc.filename}"},
     )
 
 

@@ -1,4 +1,3 @@
-# ml-service/antiplagiator/engine_modules/remote_index.py
 from __future__ import annotations
 
 import logging
@@ -12,14 +11,6 @@ LOGGER = logging.getLogger("plagiarism_engine.remote_index")
 
 
 class RemoteIndex:
-    """
-    Mimics faiss.Index.search() — sends text chunks to Modal for encoding+search
-    and returns (similarities, indices) numpy arrays in exactly the format
-    the engine expects from a local FAISS index.
-
-    Also exposes search_category() for Option 1 (per-chunk category routing),
-    which calls the /sentinel-search-category endpoint on Modal.
-    """
 
     def __init__(
         self,
@@ -33,9 +24,6 @@ class RemoteIndex:
         self._timeout       = timeout
         self._default_top_k = default_top_k
 
-        # Derive the category search URL from the global search URL
-        # Global:   https://workspace--sentinel-search.modal.run
-        # Category: https://workspace--sentinel-search-category.modal.run
         self._cat_url = self._base_url.replace(
             "sentinel-search", "sentinel-search-category"
         )
@@ -98,7 +86,7 @@ class RemoteIndex:
 
     def search(
         self,
-        query_vectors: np.ndarray,   # ignored — we use texts sent via set_query_texts
+        query_vectors: np.ndarray,
         k: int | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -188,27 +176,7 @@ class RemoteIndex:
         k: int | None = None,
         threshold: float = 0.0,
     ) -> tuple[list[list[float]], list[list[dict]]]:
-        """
-        OPTION 1 — Search a specific per-category sub-index on Modal.
-
-        Called by the engine when route_per_chunk() assigns a chunk to a
-        specific category. Returns results in the same format as
-        _search_per_category_parallel() so the existing hit-processing
-        logic works without changes.
-
-        Parameters
-        ----------
-        texts     : the chunk texts for this batch (1 or more chunks)
-        category  : category code e.g. "cs", "math", "astro_ph"
-        k         : top-K hits per chunk
-        threshold : minimum similarity score (applied server-side)
-
-        Returns
-        -------
-        (all_scores, all_metas)
-          all_scores : list[list[float]]  — scores per chunk
-          all_metas  : list[list[dict]]   — metadata dicts per chunk
-        """
+      
         top_k = k or self._default_top_k
         n     = len(texts)
 

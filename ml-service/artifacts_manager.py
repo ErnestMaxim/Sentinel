@@ -7,8 +7,6 @@ from pathlib import Path
 LOGGER = logging.getLogger("artifacts_manager")
 
 REQUIRED_FILES = [
-    "faiss_document_index.bin",
-    "faiss_metadata.pkl",
     "category_classifier_v2.pkl",
 ]
 
@@ -72,7 +70,7 @@ def ensure_artifacts(
         local_dir=str(artifacts_dir),
         token=hf_token,
         ignore_patterns=[".gitattributes", "*.git*"],
-        local_dir_use_symlinks=False,   # ← add this
+        local_dir_use_symlinks=False,
     )
 
     # Verify after download
