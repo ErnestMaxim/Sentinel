@@ -1,6 +1,4 @@
 // ── Shared document & report types ────────────────────────────────────────────
-// Used by HistoryPage, AnalyzerPage, and the report generator.
-
 export interface EngineMatch {
   query_chunk_idx:      number
   query_text:           string
@@ -29,8 +27,8 @@ export interface EngineReport {
   global_plagiarism_score_percent: number
   total_suspicious_sources:        number
   total_reported_sources:          number
-  full_text?:                      string   // normalized text (for matching)
-  display_text?:                   string   // original extracted text (for display)
+  full_text?:                      string
+  display_text?:                   string
   document_stats: {
     total_words:           number
     total_chunks_analyzed: number

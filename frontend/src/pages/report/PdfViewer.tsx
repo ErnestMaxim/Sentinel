@@ -1,21 +1,10 @@
-/**
- * PdfViewer.tsx
- *
- * Renders an uploaded PDF page-by-page using PDF.js (loaded from CDN).
- * Exact copied phrases are highlighted by drawing semi-transparent red
- * rectangles on an overlay canvas positioned above each page's PDF canvas.
- * This canvas-based approach is reliable regardless of PDF.js text-layer
- * internals — the highlights are guaranteed to be visible.
- */
 import { useEffect, useRef, useState } from 'react'
 import styles from './PdfViewer.module.css'
 
 // ── Public types ───────────────────────────────────────────────────────────────
-
 export interface PhraseEntry {
   phrase:    string
   sourceIdx: number
-  /** Severity determines highlight colour: identical=red, highly_similar=amber, paraphrased=purple */
   severity:  'identical' | 'highly_similar' | 'paraphrased'
 }
 
@@ -25,8 +14,6 @@ interface Props {
   phrases:       PhraseEntry[]
   onPhraseClick: (sourceIdx: number) => void
 }
-
-// ── PDF.js CDN loader (cached) ─────────────────────────────────────────────────
 
 const PDFJS_VER  = '3.11.174'
 const PDFJS_BASE = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VER}`
@@ -55,7 +42,6 @@ function loadPdfJs(): Promise<any> {
 }
 
 // ── Canvas highlight drawing ───────────────────────────────────────────────────
-
 interface TextItem {
   str:       string
   transform: number[]   // PDF transform matrix [a,b,c,d,tx,ty]
@@ -63,24 +49,10 @@ interface TextItem {
   height:    number
 }
 
-/**
- * Draws semi-transparent red rectangles on `overlayCanvas` for every
- * occurrence of every phrase found in the page's text content.
- *
- * Uses `viewport.convertToViewportPoint` to map PDF user-space coordinates
- * to canvas pixel coordinates.
- */
-// Highlight colours — three severity tiers
 const IDENTICAL_COLOR = 'rgba(220, 38,  38,  0.30)'  // red    – identical (≥ 95%)
 const SIMILAR_COLOR   = 'rgba(217, 119,  6,  0.28)'  // amber  – highly similar (85–95%)
 const PARA_COLOR      = 'rgba(124, 58,  237, 0.22)'  // purple – paraphrased (< 85%)
 
-/**
- * Unicode Greek → ASCII token table.
- * Must match the backend's normalize_text_for_fingerprint (normalizer.py).
- * The backend converts α→ALPHA→alpha; we do the same so PDF.js-extracted
- * Unicode symbols produce the same tokens as the already-normalised query_text.
- */
 const GREEK_MAP: [string, string][] = [
   ['α','alpha'],['β','beta'],['γ','gamma'],['δ','delta'],['ε','epsilon'],
   ['ζ','zeta'],['η','eta'],['θ','theta'],['ι','iota'],['κ','kappa'],
@@ -91,78 +63,37 @@ const GREEK_MAP: [string, string][] = [
   ['Π','pi'],['Σ','sigma'],['Υ','upsilon'],['Φ','phi'],['Ψ','psi'],['Ω','omega'],
 ]
 
-/**
- * Normalise text for paraphrase matching.
- *
- * The backend stores query_text after normalize_text_for_fingerprint which:
- *   – converts Unicode/LaTeX Greek to ASCII tokens (α→alpha, \alpha→alpha)
- *   – strips remaining LaTeX commands and delimiters
- *   – lowercases and collapses whitespace
- *
- * PDF.js extracts visual text containing Unicode math symbols and plain ASCII.
- * Applying this function to BOTH sides makes them comparable:
- *   PDF.js "α"  → "alpha"   ≡  query_text "alpha"  ✓
- *   PDF.js "R-linear" → "r linear"  ≡  query_text "r linear"  ✓
- */
 function normForMatch(s: string): string {
-  // 1. Unicode Greek → ASCII tokens (matches backend normalizer step 2)
+  // Unicode Greek → ASCII tokens (matches backend normalizer step 2)
   let t = s
   for (const [ch, tok] of GREEK_MAP) t = t.replaceAll(ch, ` ${tok} `)
 
   return t
-    // 2. Inline LaTeX $...$ — strip dollar signs, keep content
+    // Inline LaTeX $...$ — strip dollar signs, keep content
     .replace(/\$([^$\n]*)\$/g, (_, inner) =>
       inner.replace(/\\[a-zA-Z]+\*?/g, ' ').replace(/[{}_^]/g, ' '))
-    // 3. \cmd{inner} → inner
+    // \cmd{inner} → inner
     .replace(/\\[a-zA-Z]+\*?\s*\{([^}]*)\}/g, ' $1 ')
-    // 4. Standalone LaTeX commands → space
+    // Standalone LaTeX commands → space
     .replace(/\\[a-zA-Z]+\*?/g, ' ')
-    // 5. Strip ALL non-alphanumeric (hyphens, parens, commas, brackets, etc.)
-    //    Both sides are reduced to bare word tokens so item-boundary punctuation
-    //    differences can't break the match.
+    // Strip ALL non-alphanumeric (hyphens, parens, commas, brackets, etc.)
     .replace(/[^a-zA-Z0-9\s]+/g, ' ')
-    // 6. Collapse whitespace, lowercase
     .replace(/\s+/g, ' ').toLowerCase().trim()
 }
 
-/**
- * Draws highlights on `overlayCanvas` for every phrase found in the page's
- * text content.
- *
- * Key design decisions
- * ────────────────────
- * 1. Each PDF text item is drawn AT MOST ONCE regardless of how many phrase
- *    matches cover it.  This prevents opacity accumulation (the "darker red"
- *    issue where the same sentence gets multiple overlapping rectangles).
- *
- * 2. severity='identical' phrases are searched verbatim in the lower-cased raw text.
- *
- * 3. severity='highly_similar' and 'paraphrased' phrases carry marker-pdf LaTeX text.
- *    They are searched in a parallel normalised string built from the same text items,
- *    using normForMatch() on both sides so the comparison is apples-to-apples.
- *
- * 4. Priority:  exact (red) always wins over paraphrase (purple) for any item
- *    that is claimed by both.
- */
 function drawHighlights(
   overlayCanvas: HTMLCanvasElement,
   viewport:      any,
   textItems:     TextItem[],
   phrases:       PhraseEntry[],
-): Map<number, number> /* charOffset → sourceIdx */ {
+): Map<number, number>{
 
   const ctx = overlayCanvas.getContext('2d')!
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height)
-
-  // ── Build text strings ─────────────────────────────────────────────────────
-  // fullText  : raw concatenation for exact-phrase search
-  // normFull  : normalised concatenation for paraphrase search
-  // Both track per-item start/end so we can map matches → items.
-
   interface ItemRange {
-    start:     number   // position in fullText
+    start:     number
     end:       number
-    normStart: number   // position in normFull
+    normStart: number
     normEnd:   number
     item:      TextItem
   }
@@ -185,20 +116,14 @@ function drawHighlights(
     allRanges.push(r)
     rangeByItem.set(item, r)
     fullText += item.str
-    normFull += ns + ' '  // space separator so word boundaries survive normalisation
+    normFull += ns + ' '
   }
   if (!fullText) return new Map()
 
   const lower = fullText.toLowerCase()
-
   // ── Claim items ───────────────────────────────────────────────────────────
-  // For each phrase match we "claim" the items it covers.
-  // Priority: identical (1) > highly_similar (2) > paraphrased (3)
-
   const itemClaim = new Map<TextItem, { type: 1 | 2 | 3; sourceIdx: number }>()
 
-  // Priority: identical (1) > highly_similar (2) > paraphrased (3)
-  // A lower number always wins when two phrases contest the same item.
   const SEVERITY_TYPE = {
     identical:      1 as const,
     highly_similar: 2 as const,
@@ -215,7 +140,6 @@ function drawHighlights(
       const rE = useNorm ? r.normEnd   : r.end
       if (rE <= rangeStart || rS >= rangeEnd) continue
       const existing = itemClaim.get(r.item)
-      // Higher-priority type (lower number) always wins
       if (!existing || type < existing.type) {
         itemClaim.set(r.item, { type, sourceIdx })
       }
@@ -237,11 +161,6 @@ function drawHighlights(
         pos = idx + ph.length
       }
     } else {
-      // ── Highly similar / Paraphrase: 5-word n-gram regex with \s+ gaps ───
-      // A direct indexOf on a 100-word chunk is too brittle — one item-boundary
-      // space difference anywhere in the chunk breaks the whole match.
-      // Instead we slide a 5-word window (step 3) across the normalised phrase
-      // and look for each n-gram with flexible whitespace between tokens.
       const normPhrase = normForMatch(phrase)
       const words = normPhrase.split(' ').filter(w => w.length > 0)
       if (words.length < 5) continue
@@ -251,10 +170,8 @@ function drawHighlights(
 
       for (let wi = 0; wi <= words.length - NGRAM; wi += STEP) {
         const gram = words.slice(wi, wi + NGRAM)
-        // Skip trivial n-grams made mostly of short stop words
         if (gram.filter(w => w.length > 3).length < 3) continue
 
-        // Build regex: each word separated by one-or-more whitespace chars
         const re = new RegExp(gram.join('\\s+'), 'g')
         let m: RegExpExecArray | null
         while ((m = re.exec(normFull)) !== null) {
@@ -270,7 +187,6 @@ function drawHighlights(
   const charSourceMap = new Map<number, number>()
 
   for (const [item, { type, sourceIdx }] of itemClaim) {
-    // Draw the highlight rectangle
     ctx.fillStyle = type === 1 ? IDENTICAL_COLOR
                   : type === 2 ? SIMILAR_COLOR
                   :               PARA_COLOR
@@ -281,8 +197,6 @@ function drawHighlights(
     if (itemW >= 1 && fontH >= 1) {
       ctx.fillRect(cx, cy - fontH, itemW, fontH * 1.25)
     }
-
-    // Populate click-detection map
     const r = rangeByItem.get(item)
     if (r) {
       for (let c = r.start; c < r.end; c++) {
@@ -314,11 +228,9 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
       wrap.innerHTML = ''
 
       try {
-        // Load PDF.js
         const lib = await loadPdfJs()
         if (cancelled) return
 
-        // Fetch the PDF with auth header
         const res = await fetch(pdfUrl, {
           headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         })
@@ -326,14 +238,13 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
         const buf = await res.arrayBuffer()
         if (cancelled) return
 
-        // Parse PDF
         const pdfDoc = await lib.getDocument({ data: buf }).promise
         if (cancelled) return
 
         const total = pdfDoc.numPages
         setProgress({ n: 0, total })
 
-        const SCALE = 1.5   // rendering scale (higher = crisper, slower)
+        const SCALE = 1.5
 
         for (let pn = 1; pn <= total; pn++) {
           if (cancelled) return
@@ -350,7 +261,7 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
           shell.style.height = H + 'px'
           wrap.appendChild(shell)
 
-          // ── 1. PDF canvas (bottom layer) ─────────────────────────────
+          // ── PDF canvas (bottom layer) ─────────────────────────────
           const pdfCanvas    = document.createElement('canvas')
           pdfCanvas.width    = W
           pdfCanvas.height   = H
@@ -361,12 +272,12 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
           await page.render({ canvasContext: pdfCtx, viewport }).promise
           if (cancelled) return
 
-          // ── 2. Get text content ──────────────────────────────────────
+          // ── Get text content ──────────────────────────────────────
           const textContent = await page.getTextContent()
           if (cancelled) return
           const textItems = (textContent.items ?? []) as TextItem[]
 
-          // ── 3. Highlight overlay canvas (middle layer) ───────────────
+          // ── Highlight overlay canvas (middle layer) ───────────────
           if (phrases.length > 0 && textItems.length > 0) {
             const hlCanvas    = document.createElement('canvas')
             hlCanvas.width    = W
@@ -376,14 +287,12 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
 
             const charSourceMap = drawHighlights(hlCanvas, viewport, textItems, phrases)
 
-            // Click on highlight → scroll to source detail
             if (charSourceMap.size > 0) {
               hlCanvas.addEventListener('click', (e) => {
                 const rect = hlCanvas.getBoundingClientRect()
                 const mx   = (e.clientX - rect.left) * (W / rect.width)
                 const my   = (e.clientY - rect.top)  * (H / rect.height)
 
-                // Find which text item was clicked and what sourceIdx it maps to
                 let bestSourceIdx = -1
                 let bestDist      = Infinity
 
@@ -395,7 +304,6 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
                   const fontH    = Math.sqrt(a * a + b * b) * viewport.scale
                   const itemW    = Math.abs(item.width) * viewport.scale
 
-                  // Check if click is within this item's highlight rect
                   if (mx >= cx && mx <= cx + itemW && my >= cy - fontH && my <= cy + fontH * 0.25) {
                     for (let i = charOffset; i < charOffset + item.str.length; i++) {
                       if (charSourceMap.has(i)) {
@@ -413,7 +321,7 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
             }
           }
 
-          // ── 4. Text layer (top layer – for copy/select) ──────────────
+          // ── Text layer (top layer – for copy/select) ──────────────
           if (lib.renderTextLayer) {
             const tlDiv            = document.createElement('div')
             tlDiv.className        = styles.textLayer
@@ -447,8 +355,6 @@ export default function PdfViewer({ pdfUrl, authToken, phrases, onPhraseClick }:
     run()
     return () => { cancelled = true }
 
-  // Re-render only when the URL or phrases change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfUrl, authToken, JSON.stringify(phrases)])
 
   return (

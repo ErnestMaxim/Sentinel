@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef, type ReactNode } from 'react'
+import { useEffect, useState, useRef} from 'react'
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
-import { generatePdfReport } from '../../utils/report'
 import type { EngineReport, EngineMatch, EngineSource } from '../../utils/report'
 import styles from './ReportPage.module.css'
 import PdfViewer, { type PhraseEntry } from './PdfViewer'
@@ -11,7 +10,6 @@ import PdfViewer, { type PhraseEntry } from './PdfViewer'
 // Register the useGSAP plugin at module level
 gsap.registerPlugin(useGSAP)
 
-// ── Storage key (shared with AnalyzerPage + HistoryPage) ──────────────────────
 
 export const REPORT_STORAGE_KEY = 'sentinel_report_data'
 
@@ -20,44 +18,20 @@ export interface StoredReport {
   filename:    string
   date:        string
   documentId:  number
-  autoPrint?:  boolean   // if true, trigger window.print() after page loads
+  autoPrint?:  boolean
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
 function scoreColor(pct: number): string {
   if (pct <= 15) return '#16a34a'
   if (pct <= 40) return '#d97706'
   return '#dc2626'
 }
-function scoreBg(pct: number): string {
-  if (pct <= 15) return '#f0fdf4'
-  if (pct <= 40) return '#fffbeb'
-  return '#fef2f2'
-}
-function scoreBorder(pct: number): string {
-  if (pct <= 15) return '#bbf7d0'
-  if (pct <= 40) return '#fde68a'
-  return '#fecaca'
-}
 
 // ── Pure module-scope helpers ─────────────────────────────────────────────────
-
 function handleDownload() { window.print() }
 
 // ── Build phrase list for PDF.js highlighter ──────────────────────────────────
-//
-// Three highlight tiers (maps to PhraseEntry.severity):
-//   identical      (red)   — verbatim phrases from exact_copied_phrases
-//   highly_similar (amber) — query_text chunk for high-sim but non-verbatim matches
-//   paraphrased    (purple)— query_text chunk for semantic / reranker-detected paraphrases
-//
-// Every match contributes at most two entries:
-//   1. Each verbatim phrase → severity='identical' (red exact-phrase highlight)
-//   2. The full query_text  → severity from _matchSeverity (chunk-level block highlight)
-//      Only emitted when detection='paraphrase' OR there are no verbatim phrases
-//      (avoids a redundant chunk highlight when verbatim phrases already cover it).
-
 function buildPhrases(report: EngineReport): PhraseEntry[] {
   const entries: PhraseEntry[] = []
   report.sources.forEach((src, si) => {
@@ -65,12 +39,10 @@ function buildPhrases(report: EngineReport): PhraseEntry[] {
       const sev         = _matchSeverity(m)
       const exactPhrases = (m.exact_copied_phrases ?? []).filter(p => p.trim().length > 8)
 
-      // Verbatim phrases → always 'identical' (red), regardless of overall severity
       exactPhrases.forEach(ph =>
         entries.push({ phrase: ph.trim(), sourceIdx: si, severity: 'identical' })
       )
 
-      // Chunk-level highlight for paraphrase / high-sim matches with no verbatim phrases
       const isParaphrase = m.detection === 'paraphrase'
       const impliedPara  = exactPhrases.length === 0
       if (isParaphrase || impliedPara) {
@@ -84,17 +56,6 @@ function buildPhrases(report: EngineReport): PhraseEntry[] {
 }
 
 // ── Full-document highlighter (used in print section) ────────────────────────
-//
-// Four-state char map — mirrors PhraseEntry.severity + overlap detection:
-//   0 = no match
-//   1 = identical      → red
-//   2 = highly_similar → amber
-//   3 = paraphrased    → purple
-//
-// Priority: lower number always wins (identical > similar > paraphrase).
-// When a second *different* source claims a char that already has a type,
-// the higher-priority type is kept.
-
 const _SEVERITY_TYPE: Record<PhraseEntry['severity'], 1 | 2 | 3> = {
   identical:      1,
   highly_similar: 2,
@@ -104,10 +65,9 @@ const _SEVERITY_TYPE: Record<PhraseEntry['severity'], 1 | 2 | 3> = {
 function DocumentHighlighter({ text, phrases }: { text: string; phrases: PhraseEntry[] }) {
   const lower   = text.toLowerCase()
   const len     = text.length
-  const typeArr = new Uint8Array(len)           // 0=none 1=identical 2=similar 3=para
-  const srcArr  = new Int32Array(len).fill(-1)  // which source last wrote each char
+  const typeArr = new Uint8Array(len)
+  const srcArr  = new Int32Array(len).fill(-1)
 
-  // Longest phrases first so sub-phrases don't shadow broader matches
   for (const { phrase, sourceIdx, severity } of phrases.toSorted((a, b) => b.phrase.length - a.phrase.length)) {
     const newType = _SEVERITY_TYPE[severity]
     const ph = phrase.toLowerCase().trim()
@@ -118,12 +78,10 @@ function DocumentHighlighter({ text, phrases }: { text: string; phrases: PhraseE
       if (idx === -1) break
       for (let i = idx; i < idx + ph.length; i++) {
         const cur = typeArr[i]
-        // Write if: unclaimed, OR higher priority (lower number), OR same priority different source
         if (cur === 0 || newType < cur) {
           typeArr[i] = newType
           srcArr[i]  = sourceIdx
         }
-        // Same priority, different source → keep existing (first-wins within same tier)
       }
       pos = idx + ph.length
     }
@@ -150,7 +108,6 @@ function DocumentHighlighter({ text, phrases }: { text: string; phrases: PhraseE
 }
 
 // ── Inline phrase highlighter (inside match cards) ────────────────────────────
-
 function HighlightedText({ text, phrases, isExact }: {
   text:    string
   phrases: string[]
@@ -161,7 +118,7 @@ function HighlightedText({ text, phrases, isExact }: {
   const lower  = text.toLowerCase()
   const marked = new Uint8Array(text.length)
 
-  for (const ph of phrases.toSorted((a, b) => b.length - a.length)) {
+  for (const ph of phrases.toSorted((a: string, b: string) => b.length - a.length)) {
     const p = ph.toLowerCase().trim()
     if (p.length < 4) continue
     let pos = 0
@@ -194,12 +151,6 @@ function HighlightedText({ text, phrases, isExact }: {
 }
 
 // ── Severity helpers ──────────────────────────────────────────────────────────
-//
-// Match-level severity (falls back to match_percentage for old cached reports):
-//   identical      (≥ 0.95)   → red
-//   highly_similar (0.85-0.95)→ amber
-//   paraphrased    (< 0.85)   → purple / reranker path
-
 function _matchSeverity(match: EngineMatch): 'identical' | 'highly_similar' | 'paraphrased' {
   if (match.severity) return match.severity
   if (match.detection === 'paraphrase') return 'paraphrased'
@@ -233,7 +184,7 @@ function MatchCard({ match, index }: { match: EngineMatch; index: number }) {
                   : severity === 'highly_similar' ? styles.labelAmber
                   :                                 styles.labelPurple
   const phraseCls = severity === 'identical'      ? styles.phraseRed
-                  : severity === 'highly_similar' ? styles.phraseRed   // amber phrases still red-highlight
+                  : severity === 'highly_similar' ? styles.phraseRed
                   :                                 styles.phrasePurple
   const label     = severity === 'identical'      ? 'Exact copy'
                   : severity === 'highly_similar' ? 'Highly similar'
@@ -293,7 +244,6 @@ function MatchCard({ match, index }: { match: EngineMatch; index: number }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-
 export default function ReportPage() {
   "use no memo"
 
@@ -328,19 +278,19 @@ export default function ReportPage() {
     const r    = 68
     const circ = 2 * Math.PI * r
 
-    // 1. Cover card slides up + fades in
+    // Cover card slides up + fades in
     gsap.fromTo('[data-gsap="cover"]',
       { opacity: 0, y: 24 },
       { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }
     )
 
-    // 2. Status badge drops in slightly after cover
+    // Status badge drops in slightly after cover
     gsap.fromTo('[data-gsap="cover-badge"]',
       { opacity: 0, y: -6 },
       { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', delay: 0.18 }
     )
 
-    // 3. Score ring draws from zero, number counts up
+    // Score ring draws from zero, number counts up
     if (arcRef.current && scoreNumRef.current) {
       gsap.set(arcRef.current, { attr: { 'stroke-dasharray': `0 ${circ}` } })
 
@@ -358,13 +308,13 @@ export default function ReportPage() {
       })
     }
 
-    // 4. Stat cards stagger up
+    // Stat cards stagger up
     gsap.fromTo('[data-gsap="stat-card"]',
       { opacity: 0, y: 14 },
       { opacity: 1, y: 0, duration: 0.42, stagger: 0.09, ease: 'power2.out', delay: 0.28 }
     )
 
-    // 5. Table rows cascade in from left
+    // Table rows cascade in from left
     gsap.fromTo('[data-gsap="table-row"]',
       { opacity: 0, x: -10 },
       { opacity: 1, x: 0, duration: 0.3, stagger: 0.055, ease: 'power2.out', delay: 0.5 }
@@ -391,7 +341,6 @@ export default function ReportPage() {
   const pdfUrl    = `${API}/documents/${documentId}/file`
   const phrases   = buildPhrases(report)
 
-  // Ring geometry — must match values used inside useGSAP
   const R    = 68
   const circ = 2 * Math.PI * R
 

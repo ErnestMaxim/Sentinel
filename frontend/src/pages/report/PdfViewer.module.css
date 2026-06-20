@@ -1,5 +1,3 @@
-/* PdfViewer.module.css */
-
 .viewer {
   background: #d1d5db;
   min-height: 300px;
@@ -52,47 +50,46 @@
 
 /* ── Single page shell (stacking context) ── */
 .pageShell {
-  position: relative;
-  background: #fff;
-  box-shadow: 0 3px 16px rgba(0,0,0,0.22);
-  /* width/height set by JS */
-}
+    position: relative;
+    background: #fff;
+    box-shadow: 0 3px 16px rgba(0,0,0,0.22);
 
-/* ── PDF canvas (bottom — the actual PDF rendering) ── */
-.pdfCanvas {
-  display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
-}
+  /* ── PDF canvas (bottom — the actual PDF rendering) ── */
+  .pdfCanvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
 
-/* ── Highlight canvas (middle — red highlight boxes) ── */
-.hlCanvas {
-  display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: auto;   /* receives click events */
-  cursor: pointer;
-}
+  /* ── Highlight canvas (middle — red highlight boxes) ── */
+  .hlCanvas {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: auto;
+    cursor: pointer;
+  }
 
-/* ── Text layer (top — transparent text for copy/select) ── */
-.textLayer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  overflow: hidden;
-  pointer-events: none;   /* let clicks through to hlCanvas */
-  user-select: text;
-  line-height: 1;
-}
+  /* ── Text layer (top — transparent text for copy/select) ── */
+  .textLayer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+    pointer-events: none;
+    user-select: text;
+    line-height: 1;
+  }
 
-/* PDF.js inserts position-absolute spans here */
-.textLayer span {
-  color: transparent;
-  position: absolute;
-  white-space: pre;
-  cursor: text;
-  transform-origin: 0% 0%;
-  pointer-events: none;
+  /* PDF.js inserts position-absolute spans here */
+  .textLayer span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    pointer-events: none;
+  }
 }

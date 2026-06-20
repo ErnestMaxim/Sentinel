@@ -1,17 +1,3 @@
-"""
-scripts/upload_artifacts_to_hf.py
-
-Run ONCE from your local machine to push your FAISS artifacts to HuggingFace Hub.
-
-Usage:
-    python scripts/upload_artifacts_to_hf.py \
-        --artifacts-dir backend/core/antiplagiator/artifacts \
-        --repo-id YOUR_HF_USERNAME/antiplagiator-artifacts \
-        --token hf_YOUR_TOKEN_HERE
-
-Requirements:
-    pip install huggingface_hub
-"""
 from __future__ import annotations
 
 import argparse
