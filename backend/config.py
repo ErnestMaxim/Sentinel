@@ -49,3 +49,7 @@ class Settings(BaseSettings):
             f"postgresql+psycopg2://{self.user}:{quote_plus(self.password)}"
             f"@{self.host}:{self.port}/{self.dbname}?sslmode=require"
         )
+    
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
