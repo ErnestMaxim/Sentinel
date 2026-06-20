@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     ml_shared_upload_dir: str = "uploads"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "https://sentinel-ivory-three.vercel.app"]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
