@@ -70,8 +70,7 @@ function drawSourceHeader(doc: jsPDF, src: EngineSource, index: number, y: numbe
 
 function drawMatchCard(
   doc:       jsPDF,
-  m:         { query_text: string; db_text?: string; match_percentage: number; detection?: string; exact_copied_phrases?: string[] },
-  index:     number,
+  m:         { query_text: string; db_text?: string; match_percentage: number; detection?: string; exact_copied_phrases?: string[] }
 ): number {
   const phrases = m.exact_copied_phrases ?? []
 
@@ -246,7 +245,7 @@ export function renderSource(
   }
 
   filteredMatches.forEach((m, mi) => {
-    const estH = drawMatchCard(doc, m, mi)
+    const estH = drawMatchCard(doc, m)
 
     if (y + estH > PH - 16) {
       addPage(doc)
