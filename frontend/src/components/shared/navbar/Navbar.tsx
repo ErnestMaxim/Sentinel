@@ -14,6 +14,7 @@ import {
   UserPlus,
   Menu,
 } from 'lucide-react'
+import { useAnalysis } from '../../../context/AnalysisContext'
 
 const SIDEBAR_FULL = 220
 const SIDEBAR_MINI = 64
@@ -50,6 +51,7 @@ export default function Navbar() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user, loading, signOut } = useAuth()
+  const { isRunning } = useAnalysis()
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('sidebar-collapsed') === 'true'
   )
@@ -70,16 +72,14 @@ export default function Navbar() {
     startPageTransition(() => navigate('/signin'))
   }
 
-  // Navigate with a view-transition + direction tracking
   function handleNavTo(to: string) {
     setMobileOpen(false)
     setNavDirection(pathname, to)
     startPageTransition(() => navigate(to))
   }
 
-  // Which nav item is active (for the sliding pill)
   const activeNavIndex = NAV_ITEMS.findIndex(({ href }) => pathname === href)
-  // Pill Y offset: each item is 44px tall + 2px gap = 46px per step
+
   const pillY = activeNavIndex >= 0 ? activeNavIndex * 46 : -200
 
   return (
@@ -159,6 +159,9 @@ export default function Navbar() {
             >
               <span className={styles.icon}><Icon size={16} /></span>
               {!collapsed && <span className={styles.label}>{label}</span>}
+              {label === 'Check Document' && isRunning && (
+                <span className={styles.analysisPulse} aria-label="Analysis in progress" />
+              )}
             </button>
           ))}
         </nav>

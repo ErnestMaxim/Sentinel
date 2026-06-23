@@ -109,10 +109,7 @@
   margin: 0 auto;
 }
 
-/* ══ COVER CARD ════════════════════════════════════════════════
-   Observatory terminal aesthetic: dark glass with amber accents.
-   Ring on the left, headline + stats on the right.
-══════════════════════════════════════════════════════════════ */
+/* ══ COVER CARD ════════════════════════════════════════════════ */
 .cover {
   position: relative;
   overflow: hidden;
@@ -131,7 +128,6 @@
     0 24px 72px rgba(0, 0, 0, 0.52);
 }
 
-/* ── Top amber accent shimmer ── */
 .cover::before {
   content: '';
   position: absolute;
@@ -143,7 +139,6 @@
   pointer-events: none;
 }
 
-/* ── Status badge — "Analysis complete" ── */
 .statusBadge {
   display: inline-flex;
   align-items: center;
@@ -160,7 +155,6 @@
   width: fit-content;
 }
 
-/* ── Right-side container for title, meta, stats ── */
 .heroRight {
   flex: 1;
   display: flex;
@@ -186,7 +180,6 @@
   letter-spacing: 0.005em;
 }
 
-/* ── Score + stats row ─────────────────────────────────────── */
 .scoreHero {
   display: flex;
   align-items: center;
@@ -195,7 +188,6 @@
   flex-wrap: wrap;
 }
 
-/* ── Score ring ────────────────────────────────────────────── */
 .ringWrap {
   position: relative;
   width: 168px;
@@ -203,11 +195,8 @@
   flex-shrink: 0;
 }
 
-.ringsvg {
-  display: block;
-}
+.ringsvg { display: block; }
 
-/* Number + label overlaid at the ring centre */
 .ringCenter {
   position: absolute;
   top: 50%;
@@ -237,7 +226,6 @@
   color: rgba(255, 255, 255, 0.3);
 }
 
-/* ── Stat panel — dark glass strip ──────────────────────────── */
 .statBar {
   flex: 0 0 auto;
   display: flex;
@@ -261,7 +249,6 @@
   position: relative;
 }
 
-/* Thin vertical divider between adjacent cards */
 .statCard + .statCard::before {
   content: '';
   position: absolute;
@@ -290,14 +277,12 @@
   text-align: center;
 }
 
-/* ── Divider ───────────────────────────────────────────────── */
 .divider {
   border: none;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   margin: 0 0 20px;
 }
 
-/* ── Section heading ───────────────────────────────────────── */
 .sectionHeading {
   font-size: 9px;
   font-weight: 700;
@@ -336,7 +321,6 @@
   transition: background 0.14s, padding-left 0.18s;
 }
 
-/* Hover left accent bar — amber brand colour */
 .tableRow::before {
   content: '';
   position: absolute;
@@ -351,7 +335,33 @@
 
 .tableRow:hover { background: rgba(255, 210, 0, 0.04); padding-left: 18px; }
 .tableRow:hover::before { background: #FFD200; }
-.tableRow:last-child { border-radius: 0 0 8px 8px; }
+
+/* ── Minor sources toggle ──────────────────────────────────── */
+.minorToggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.048);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  background: rgba(255, 255, 255, 0.015);
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+  text-align: left;
+}
+.minorToggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* When there are no minor sources the last tableRow gets rounded bottom */
+.tableRow:last-of-type { border-radius: 0 0 8px 8px; }
 
 .srcCell {
   flex: 1;
@@ -403,22 +413,11 @@
   flex-shrink: 0;
 }
 
-.badgeExact {
-  background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
-}
-.badgeExact::before { background: #f87171; }
-
-.badgePara {
-  background: rgba(167, 139, 250, 0.12);
-  color: #a78bfa;
-}
-.badgePara::before { background: #a78bfa; }
-
-.badgeSimilar {
-  background: rgba(245, 158, 11, 0.12);
-  color: #d97706;
-}
+.badgeExact   { background: rgba(239, 68, 68, 0.12);  color: #f87171; }
+.badgeExact::before   { background: #f87171; }
+.badgePara    { background: rgba(167, 139, 250, 0.12); color: #a78bfa; }
+.badgePara::before    { background: #a78bfa; }
+.badgeSimilar { background: rgba(245, 158, 11, 0.12);  color: #d97706; }
 .badgeSimilar::before { background: #d97706; }
 
 /* ── No-sources callout ────────────────────────────────────── */
@@ -444,60 +443,6 @@
   overflow: hidden;
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.05);
 }
-
-.docSectionHeader {
-  padding: 18px 24px 14px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  background: rgba(0, 0, 0, 0.012);
-}
-
-.docSectionTitle {
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0 0 5px;
-  letter-spacing: -0.015em;
-}
-
-.docSectionSub {
-  font-size: 12px;
-  color: #64748b;
-  margin: 0 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-.legendChip {
-  display: inline-block;
-  background: #fca5a5;
-  color: #7f1d1d;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 4px;
-}
-
-.legendRow { display: flex; flex-wrap: wrap; gap: 5px; }
-
-.legendChipBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  font-size: 11px;
-  font-weight: 500;
-  color: #374151;
-  cursor: pointer;
-  transition: all 0.12s;
-  white-space: nowrap;
-}
-.legendChipBtn:hover { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
-.legendDot { width: 7px; height: 7px; border-radius: 50%; background: #dc2626; flex-shrink: 0; }
 
 /* ══ SOURCE DETAIL SECTIONS ════════════════════════════════════ */
 .sourceSection {
@@ -538,9 +483,9 @@
   justify-content: center;
   flex-shrink: 0;
 }
-.numExact    { background: #dc2626; }
-.numSimilar  { background: #d97706; }
-.numPara     { background: #7c3aed; }
+.numExact   { background: #dc2626; }
+.numSimilar { background: #d97706; }
+.numPara    { background: #7c3aed; }
 
 .srcHeaderInfo  { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .srcHeaderTitle {
@@ -560,106 +505,155 @@
 .srcMatchCount { font-size: 11px; color: #94a3b8; }
 .chevron       { font-size: 9px; color: #cbd5e1; }
 
-/* ── Match cards ───────────────────────────────────────────── */
-.matchList { border-top: 1px solid rgba(0, 0, 0, 0.04); }
-.matchCard { border-bottom: 1px solid rgba(0, 0, 0, 0.04); }
-.matchCard:last-child { border-bottom: none; }
+/* ══ MATCH CARDS ═══════════════════════════════════════════════ */
+.matchList {
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.matchCard {
+  border: 0.5px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
 
 .matchHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px 0;
-}
-.matchHeaderLeft { display: flex; align-items: center; gap: 7px; }
-.matchDot  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.dotExact    { background: #dc2626; }
-.dotSimilar  { background: #d97706; }
-.dotPara     { background: #7c3aed; }
-.matchTitle   { font-size: 12.5px; font-weight: 600; color: #0f172a; }
-.matchSimPill {
-  font-size: 10.5px;
-  color: #64748b;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 2px 9px;
+  padding: 11px 16px;
+  border-bottom: 0.5px solid #e2e8f0;
 }
 
-.matchBody   { padding: 4px 20px 18px; }
+.matchHeaderLeft { display: flex; align-items: center; gap: 8px; }
+
+.matchNum {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
+.matchKindBadge {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.kindBadgeExact   { border: 0.5px solid #f87171; color: #dc2626; }
+.kindBadgeSimilar { border: 0.5px solid #fbbf24; color: #d97706; }
+.kindBadgePara    { border: 0.5px solid #a78bfa; color: #7c3aed; }
+
+.matchSimPill {
+  font-size: 11px;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 400;
+}
+
+/* ── Two-column diff layout ─────────────────────────────────── */
+.matchBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.matchCol {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.matchCol:first-child {
+  border-right: 0.5px solid #e2e8f0;
+}
 
 .blockLabel {
-  font-size: 8.5px;
-  font-weight: 700;
+  font-size: 9.5px;
+  font-weight: 600;
   color: #94a3b8;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  margin: 12px 0 5px;
+  margin: 0;
 }
 .labelRed    { color: #dc2626; }
 .labelAmber  { color: #d97706; }
 .labelPurple { color: #7c3aed; }
 
-.matchNum { font-size: 12.5px; font-weight: 600; color: #64748b; margin-right: 4px; }
-
-.matchKindBadge {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  padding: 3px 8px;
-  border-radius: 4px;
-}
-
-/* ── Document-style text blocks ────────────────────────────── */
 .docTextBlock {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 13.5px;
-  line-height: 1.8;
+  font-size: 13px;
+  line-height: 1.75;
   color: #1e293b;
-  padding: 14px 18px;
-  border-radius: 6px;
-  border-left: 3px solid;
   white-space: pre-wrap;
   word-break: break-word;
+  margin: 0;
 }
 
 .sourceTextBlock {
-  font-family: 'Georgia', 'Times New Roman', serif;
   font-size: 13px;
   line-height: 1.75;
-  color: #374151;
-  padding: 12px 18px;
-  border-left: 3px solid;
-  border-radius: 0 6px 6px 0;
+  color: #64748b;
   white-space: pre-wrap;
   word-break: break-word;
-  background: #fafafa;
+  margin: 0;
 }
 
-.accentExact    { border-left-color: #dc2626; background: #fff9f9; }
-.accentSimilar  { border-left-color: #d97706; background: #fffbf0; }
-.accentPara     { border-left-color: #7c3aed; background: #faf9ff; }
+/* ── Exact phrases row ──────────────────────────────────────── */
+.phrasesBlock {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 0.5px solid #e2e8f0;
+}
+
+.phraseChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.phrase {
+  font-size: 11.5px;
+  font-style: italic;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin: 0;
+  line-height: 1.5;
+}
+.phraseRed    { color: #dc2626; background: rgba(220, 38, 38, 0.06); }
+.phrasePurple { color: #7c3aed; background: rgba(124, 58, 237, 0.06); }
 
 /* ── Inline phrase highlights ──────────────────────────────── */
 .inlineExact {
-  background: rgba(220, 38, 38, 0.20);
+  background: rgba(220, 38, 38, 0.18);
   color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
 .inlineSimilar {
-  background: rgba(217, 119, 6, 0.22);
+  background: rgba(217, 119, 6, 0.20);
   color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
 .inlinePara {
-  background: rgba(124, 58, 237, 0.15);
+  background: rgba(124, 58, 237, 0.13);
   color: inherit;
   border-radius: 2px;
   padding: 1px 0;
 }
-/* Legacy: kept for any cached reports that still reference it */
 .inlineOverlap {
   background: rgba(217, 119, 6, 0.22);
   color: inherit;
@@ -668,11 +662,6 @@
   outline: 1px solid rgba(245, 158, 11, 0.35);
   outline-offset: 0;
 }
-
-.phrasesBlock { margin-top: 6px; }
-.phrase { font-size: 12px; font-style: italic; line-height: 1.55; margin: 0 0 3px; }
-.phraseRed    { color: #dc2626; }
-.phrasePurple { color: #7c3aed; }
 
 /* ── Footer ────────────────────────────────────────────────── */
 .footer {
@@ -689,14 +678,16 @@
 
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .main         { margin-left: 0; }
-  .content      { padding: 20px 16px 60px; }
-  .cover        { padding: 20px 18px; }
-  .coverTitle   { font-size: 16px; }
-  .scoreHero    { gap: 20px; }
-  .statCardVal  { font-size: 22px; }
-  .ringWrap     { width: 140px; height: 140px; }
-  .ringScore    { font-size: 24px; }
+  .main        { margin-left: 0; }
+  .content     { padding: 20px 16px 60px; }
+  .cover       { padding: 20px 18px; }
+  .coverTitle  { font-size: 16px; }
+  .scoreHero   { gap: 20px; }
+  .statCardVal { font-size: 22px; }
+  .ringWrap    { width: 140px; height: 140px; }
+  .ringScore   { font-size: 24px; }
+  .matchBody   { grid-template-columns: 1fr; }
+  .matchCol:first-child { border-right: none; border-bottom: 0.5px solid #e2e8f0; }
 }
 
 /* ══ PRINT HEADER (screen: hidden) ════════════════════════════ */
@@ -713,9 +704,9 @@
   margin-bottom: 10px;
   letter-spacing: 0.4px;
 }
-.printLegendExact    { color: #dc2626; }
-.printLegendSimilar  { color: #d97706; }
-.printLegendPara     { color: #7c3aed; }
+.printLegendExact   { color: #dc2626; }
+.printLegendSimilar { color: #d97706; }
+.printLegendPara    { color: #7c3aed; }
 
 .printDocText {
   font-family: 'Georgia', 'Times New Roman', serif;
@@ -726,9 +717,7 @@
   word-break: break-word;
 }
 
-/* ══ PRINT ═════════════════════════════════════════════════════
-   window.print() triggers the browser print dialog → Save as PDF.
-═══════════════════════════════════════════════════════════════ */
+/* ══ PRINT ═════════════════════════════════════════════════════ */
 @media print {
   @page { size: A4 portrait; margin: 14mm 16mm; }
 
@@ -747,7 +736,6 @@
   }
   .content { padding: 0 !important; max-width: 100% !important; }
 
-  /* ── Print-only header ── */
   .printHeader {
     display: flex;
     align-items: flex-end;
@@ -763,7 +751,6 @@
   .printHeaderFile  { font-size: 12px; font-weight: 600; color: #111827; }
   .printHeaderDate  { font-size: 10px; color: #9ca3af; }
 
-  /* ── Cover ── */
   .cover {
     box-shadow: none !important;
     border: 1px solid #e5e7eb !important;
@@ -771,9 +758,7 @@
     break-inside: avoid;
     background: #fff !important;
   }
-  .cover::before { display: none !important; }
-
-  /* Restore light text for print */
+  .cover::before   { display: none !important; }
   .coverTitle      { color: #0f172a !important; }
   .coverMeta       { color: #94a3b8 !important; }
   .statusBadge     { display: none !important; }
@@ -781,21 +766,20 @@
   .ringLabel       { color: #94a3b8 !important; }
   .srcTitle        { color: #0f172a !important; }
   .srcLink         { color: #94a3b8 !important; }
-  .srcLink:hover   { color: #3b82f6 !important; }
   .colCenter       { color: #64748b !important; }
   .divider         { border-top-color: rgba(0,0,0,0.055) !important; }
   .tableHead       { background: rgba(0,0,0,0.025) !important; border-color: rgba(0,0,0,0.05) !important; color: #c4cdd8 !important; }
   .tableRow        { border-color: rgba(0,0,0,0.048) !important; }
   .tableRow::before { display: none !important; }
+  .minorToggle     { display: none !important; }
 
-  .badgeExact { background: rgba(220,38,38,0.08) !important; color: #dc2626 !important; }
-  .badgeExact::before { background: #dc2626 !important; }
-  .badgeSimilar { background: rgba(217,119,6,0.08) !important; color: #d97706 !important; }
+  .badgeExact           { background: rgba(220,38,38,0.08) !important;  color: #dc2626 !important; }
+  .badgeExact::before   { background: #dc2626 !important; }
+  .badgeSimilar         { background: rgba(217,119,6,0.08) !important;  color: #d97706 !important; }
   .badgeSimilar::before { background: #d97706 !important; }
-  .badgePara  { background: rgba(124,58,237,0.08) !important; color: #7c3aed !important; }
-  .badgePara::before  { background: #7c3aed !important; }
+  .badgePara            { background: rgba(124,58,237,0.08) !important; color: #7c3aed !important; }
+  .badgePara::before    { background: #7c3aed !important; }
 
-  /* ── Stat panel: flatten for print ── */
   .statBar {
     border: 1px solid #e5e7eb !important;
     background: #f8fafc !important;
@@ -810,8 +794,7 @@
   .ringsvg circle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .sourcesTable { break-inside: avoid; }
-  .tableRow { break-inside: avoid; }
-  .tableRow::before { display: none; }
+  .tableRow     { break-inside: avoid; }
 
   .screenOnly { display: none !important; }
   .printOnly  { display: block !important; }
@@ -824,14 +807,11 @@
     break-inside: avoid;
   }
 
-  .matchList  { display: block !important; }
-  .matchCard  { break-inside: avoid; border-bottom: 1px solid #f3f4f6 !important; }
-
-  .docTextBlock, .sourceTextBlock { background: #fafafa !important; }
-
-  .badgeExact   { background: #fef2f2 !important; color: #dc2626 !important; }
-  .badgeSimilar { background: #fffbeb !important; color: #d97706 !important; }
-  .badgePara    { background: #f5f3ff !important; color: #7c3aed !important; }
+  .matchList { padding: 8px 10px 10px !important; }
+  .matchCard { break-inside: avoid; border: 0.5px solid #e2e8f0 !important; }
+  .matchBody { grid-template-columns: 1fr 1fr !important; }
+  .matchCol:first-child { border-right: 0.5px solid #e2e8f0 !important; border-bottom: none !important; }
+  .phrasesBlock { border-top: 0.5px solid #e2e8f0 !important; }
 
   .chevron { display: none; }
 }

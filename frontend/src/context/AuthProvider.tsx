@@ -3,9 +3,6 @@ import { AuthContext, type AuthUser } from './AuthContext'
 import { fetchMe }     from '../api/auth'
 import { mapUserDto }  from '../api/mappers/auth.mapper'
 
-// React Compiler is active in this project.
-// "use no memo" opts this provider out — the storage event callback and async
-// auth flow use patterns the compiler can't safely analyse.
 export function AuthProvider({ children }: { children: ReactNode }) {
   "use no memo"
 
@@ -17,17 +14,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) { setUser(null); setLoading(false); return }
     try {
       const dto = await fetchMe(token)
-      setUser(mapUserDto(dto))
+      const storedIcon = localStorage.getItem('sentinel-user-icon') ?? undefined
+      setUser({ ...mapUserDto(dto), avatar: storedIcon })
     } catch {
       setUser(null)
     }
     setLoading(false)
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refreshUser() }, [])
 
-  // Keep user in sync across browser tabs
   useEffect(() => {
     const handler = (e: StorageEvent) => {
       if (e.key !== 'access_token') return
@@ -36,7 +32,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function signOut() {
@@ -45,8 +40,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function setUserIcon(url: string | undefined) {
-    if (url) localStorage.setItem('sentinel-user-icon', url)
-    else     localStorage.removeItem('sentinel-user-icon')
+    try {
+      if (url) localStorage.setItem('sentinel-user-icon', url)
+      else     localStorage.removeItem('sentinel-user-icon')
+    } catch (e) {
+      console.warn('localStorage quota exceeded — icon not persisted', e)
+    }
     setUser(prev => prev ? { ...prev, avatar: url } : prev)
   }
 

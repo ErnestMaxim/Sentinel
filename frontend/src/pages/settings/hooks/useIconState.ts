@@ -35,18 +35,25 @@ export function useIconState(
 ): IconState {
   const [idx,       setIdx]       = useState<IconIdx>(0)
   const [customSrc, setCustomSrc] = useState<string | null>(null)
-
-  // Restore selection from localStorage on mount
+  
   useEffect(() => {
     const stored = localStorage.getItem(LS_ICON)   ?? ''
     const custom = localStorage.getItem(LS_CUSTOM) ?? ''
 
-    if (custom) setCustomSrc(custom)
-
-    if (!stored) return
     const presetIdx = PRESET_ICONS.indexOf(stored as PresetIcon)
-    if (presetIdx >= 0)              { setIdx((presetIdx + 1) as IconIdx); return }
-    if (stored === custom && custom) { setIdx(4);                          return }
+    if (presetIdx >= 0) {
+      setIdx((presetIdx + 1) as IconIdx)
+      return
+    }
+
+    if (stored && stored === custom) {
+      setCustomSrc(custom)
+      setIdx(4)
+      return
+    }
+
+    setCustomSrc(null)
+    setIdx(0)
   }, [])
 
   const total = (customSrc ? 5 : 4) as number
@@ -60,18 +67,37 @@ export function useIconState(
     setUserIcon(src)
   }
 
+  function resizeToBase64(file: File, maxPx = 256): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+        const w = Math.round(img.width  * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width  = w
+        canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.onerror = reject
+      img.src = url
+    })
+  }
+
   function prev() { apply(((idx - 1 + total) % total) as IconIdx) }
   function next() { apply(((idx + 1) % total) as IconIdx) }
 
   function upload(file: File) {
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const base64 = ev.target?.result as string
+    resizeToBase64(file).then(base64 => {
       localStorage.setItem(LS_CUSTOM, base64)
+      localStorage.setItem(LS_ICON,   base64)
       setCustomSrc(base64)
-      apply(4, base64)
-    }
-    reader.readAsDataURL(file)
+      setIdx(4)
+      setUserIcon(base64)
+    })
   }
 
   function remove() {

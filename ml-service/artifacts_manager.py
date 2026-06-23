@@ -10,7 +10,6 @@ REQUIRED_FILES = [
     "category_classifier_v2.pkl",
 ]
 
-
 def _all_required_present(artifacts_dir: Path) -> bool:
     """Return True only if every required file exists and is non-empty."""
     for filename in REQUIRED_FILES:

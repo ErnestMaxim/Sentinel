@@ -7,9 +7,7 @@ import type { EngineReport, EngineMatch, EngineSource } from '../../utils/report
 import styles from './ReportPage.module.css'
 import PdfViewer, { type PhraseEntry } from './PdfViewer'
 
-// Register the useGSAP plugin at module level
 gsap.registerPlugin(useGSAP)
-
 
 export const REPORT_STORAGE_KEY = 'sentinel_report_data'
 
@@ -21,22 +19,19 @@ export interface StoredReport {
   autoPrint?:  boolean
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 function scoreColor(pct: number): string {
   if (pct <= 15) return '#16a34a'
   if (pct <= 40) return '#d97706'
   return '#dc2626'
 }
 
-// ── Pure module-scope helpers ─────────────────────────────────────────────────
 function handleDownload() { window.print() }
 
-// ── Build phrase list for PDF.js highlighter ──────────────────────────────────
 function buildPhrases(report: EngineReport): PhraseEntry[] {
   const entries: PhraseEntry[] = []
   report.sources.forEach((src, si) => {
     src.matches.forEach(m => {
-      const sev         = _matchSeverity(m)
+      const sev          = _matchSeverity(m)
       const exactPhrases = (m.exact_copied_phrases ?? []).filter(p => p.trim().length > 8)
 
       exactPhrases.forEach(ph =>
@@ -55,7 +50,6 @@ function buildPhrases(report: EngineReport): PhraseEntry[] {
   return entries
 }
 
-// ── Full-document highlighter (used in print section) ────────────────────────
 const _SEVERITY_TYPE: Record<PhraseEntry['severity'], 1 | 2 | 3> = {
   identical:      1,
   highly_similar: 2,
@@ -107,7 +101,6 @@ function DocumentHighlighter({ text, phrases }: { text: string; phrases: PhraseE
   return <>{nodes}</>
 }
 
-// ── Inline phrase highlighter (inside match cards) ────────────────────────────
 function HighlightedText({ text, phrases, isExact }: {
   text:    string
   phrases: string[]
@@ -150,7 +143,6 @@ function HighlightedText({ text, phrases, isExact }: {
   return <>{nodes}</>
 }
 
-// ── Severity helpers ──────────────────────────────────────────────────────────
 function _matchSeverity(match: EngineMatch): 'identical' | 'highly_similar' | 'paraphrased' {
   if (match.severity) return match.severity
   if (match.detection === 'paraphrase') return 'paraphrased'
@@ -160,7 +152,6 @@ function _matchSeverity(match: EngineMatch): 'identical' | 'highly_similar' | 'p
   return 'paraphrased'
 }
 
-// Source-level severity — highest severity across all its matches.
 function _srcTopSeverity(src: EngineSource): 'identical' | 'highly_similar' | 'paraphrased' {
   if (src.has_exact_copies) return 'identical'
   if (src.matches.some(m => _matchSeverity(m) === 'highly_similar')) return 'highly_similar'
@@ -171,24 +162,21 @@ function MatchCard({ match, index }: { match: EngineMatch; index: number }) {
   const severity = _matchSeverity(match)
   const phrases  = match.exact_copied_phrases ?? []
 
-  const dotCls    = severity === 'identical'      ? styles.dotExact
-                  : severity === 'highly_similar' ? styles.dotSimilar
-                  :                                 styles.dotPara
-  const badgeCls  = severity === 'identical'      ? styles.badgeExact
-                  : severity === 'highly_similar' ? styles.badgeSimilar
-                  :                                 styles.badgePara
-  const accentCls = severity === 'identical'      ? styles.accentExact
-                  : severity === 'highly_similar' ? styles.accentSimilar
-                  :                                 styles.accentPara
-  const labelCls  = severity === 'identical'      ? styles.labelRed
-                  : severity === 'highly_similar' ? styles.labelAmber
-                  :                                 styles.labelPurple
+  const kindBadgeCls = severity === 'identical'      ? styles.kindBadgeExact
+                     : severity === 'highly_similar' ? styles.kindBadgeSimilar
+                     :                                 styles.kindBadgePara
+
   const phraseCls = severity === 'identical'      ? styles.phraseRed
                   : severity === 'highly_similar' ? styles.phraseRed
                   :                                 styles.phrasePurple
-  const label     = severity === 'identical'      ? 'Exact copy'
-                  : severity === 'highly_similar' ? 'Highly similar'
-                  :                                 'Paraphrase'
+
+  const labelCls = severity === 'identical'      ? styles.labelRed
+                 : severity === 'highly_similar' ? styles.labelAmber
+                 :                                 styles.labelPurple
+
+  const label = severity === 'identical'      ? 'Exact copy'
+              : severity === 'highly_similar' ? 'Highly similar'
+              :                                 'Paraphrase'
 
   return (
     <div className={styles.matchCard}>
@@ -196,46 +184,50 @@ function MatchCard({ match, index }: { match: EngineMatch; index: number }) {
       {/* ── Header ── */}
       <div className={styles.matchHeader}>
         <div className={styles.matchHeaderLeft}>
-          <div className={`${styles.matchDot} ${dotCls}`} />
           <span className={styles.matchNum}>{index + 1}.</span>
-          <span className={`${styles.matchKindBadge} ${badgeCls}`}>{label}</span>
+          <span className={`${styles.matchKindBadge} ${kindBadgeCls}`}>{label}</span>
         </div>
         <span className={styles.matchSimPill}>{match.match_percentage.toFixed(1)}% similarity</span>
       </div>
 
+      {/* ── Side-by-side comparison ── */}
       <div className={styles.matchBody}>
 
-        {/* ── YOUR TEXT ── */}
-        <p className={styles.blockLabel}>YOUR TEXT</p>
-        <div className={`${styles.docTextBlock} ${accentCls}`}>
-          <HighlightedText
-            text={match.query_text}
-            phrases={phrases}
-            isExact={severity === 'identical'}
-          />
+        {/* Left: your text */}
+        <div className={styles.matchCol}>
+          <p className={styles.blockLabel}>Your text</p>
+          <div className={styles.docTextBlock}>
+            <HighlightedText
+              text={match.query_text}
+              phrases={phrases}
+              isExact={severity === 'identical'}
+            />
+          </div>
         </div>
 
-        {/* ── MATCHED SOURCE ── */}
-        {match.db_text && (
-          <>
-            <p className={styles.blockLabel}>MATCHED SOURCE</p>
-            <div className={`${styles.sourceTextBlock} ${accentCls}`}>
+        {/* Right: matched source */}
+        {match.db_text ? (
+          <div className={styles.matchCol}>
+            <p className={styles.blockLabel}>Matched source</p>
+            <div className={styles.sourceTextBlock}>
               {match.db_text}
             </div>
-          </>
+          </div>
+        ) : (
+          <div className={styles.matchCol} />
         )}
 
-        {/* ── EXACT PHRASES ── */}
+        {/* Exact phrases — spans both columns */}
         {phrases.length > 0 && (
           <div className={styles.phrasesBlock}>
-            <p className={`${styles.blockLabel} ${labelCls}`}>
-              EXACT PHRASES
-            </p>
-            {phrases.map((ph, i) => (
-              <p key={ph || i} className={`${styles.phrase} ${phraseCls}`}>
-                "{ph}"
-              </p>
-            ))}
+            <p className={`${styles.blockLabel} ${labelCls}`}>Exact phrases</p>
+            <div className={styles.phraseChips}>
+              {phrases.map((ph, i) => (
+                <span key={ph || i} className={`${styles.phrase} ${phraseCls}`}>
+                  "{ph}"
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -243,21 +235,18 @@ function MatchCard({ match, index }: { match: EngineMatch; index: number }) {
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportPage() {
   "use no memo"
 
   const navigate = useNavigate()
-  const [stored, setStored]     = useState<StoredReport | null>(null)
-  const [expanded, setExpanded] = useState<number | null>(0)
+  const [stored, setStored]               = useState<StoredReport | null>(null)
+  const [expanded, setExpanded]           = useState<number | null>(0)
+  const [showMinorSources, setShowMinorSources] = useState(false)
   const detailsRef  = useRef<HTMLDivElement>(null)
-
-  // ── GSAP refs ────────────────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null)
   const arcRef       = useRef<SVGCircleElement>(null)
   const scoreNumRef  = useRef<HTMLSpanElement>(null)
 
-  // ── Load from sessionStorage ──────────────────────────────────────────────────
   useEffect(() => {
     const raw = sessionStorage.getItem(REPORT_STORAGE_KEY)
     if (!raw) { navigate('/check'); return }
@@ -271,29 +260,23 @@ export default function ReportPage() {
     } catch { navigate('/check') }
   }, [navigate])
 
-  // ── Entrance animations (fires when stored data becomes available) ────────────
   useGSAP(() => {
     if (!stored) return
     const sim  = stored.report.global_plagiarism_score_percent ?? 0
     const r    = 68
     const circ = 2 * Math.PI * r
 
-    // Cover card slides up + fades in
     gsap.fromTo('[data-gsap="cover"]',
       { opacity: 0, y: 24 },
       { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }
     )
-
-    // Status badge drops in slightly after cover
     gsap.fromTo('[data-gsap="cover-badge"]',
       { opacity: 0, y: -6 },
       { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', delay: 0.18 }
     )
 
-    // Score ring draws from zero, number counts up
     if (arcRef.current && scoreNumRef.current) {
       gsap.set(arcRef.current, { attr: { 'stroke-dasharray': `0 ${circ}` } })
-
       const proxy = { dash: 0, count: 0 }
       gsap.to(proxy, {
         dash:  circ * (sim / 100),
@@ -308,21 +291,16 @@ export default function ReportPage() {
       })
     }
 
-    // Stat cards stagger up
     gsap.fromTo('[data-gsap="stat-card"]',
       { opacity: 0, y: 14 },
       { opacity: 1, y: 0, duration: 0.42, stagger: 0.09, ease: 'power2.out', delay: 0.28 }
     )
-
-    // Table rows cascade in from left
     gsap.fromTo('[data-gsap="table-row"]',
       { opacity: 0, x: -10 },
       { opacity: 1, x: 0, duration: 0.3, stagger: 0.055, ease: 'power2.out', delay: 0.5 }
     )
-
   }, { scope: containerRef, dependencies: [stored] })
 
-  // ── Scroll to source ──────────────────────────────────────────────────────────
   function scrollToSource(sourceIdx: number) {
     setExpanded(sourceIdx)
     setTimeout(() => {
@@ -343,6 +321,60 @@ export default function ReportPage() {
 
   const R    = 68
   const circ = 2 * Math.PI * R
+
+  // ── Source splitting ────────────────────────────────────────────────────────
+  const THRESHOLD    = 2
+  const majorSources = sources.filter(src => {
+    const contrib = src.score_contribution_percent ?? src.average_similarity_percent
+    return contrib >= THRESHOLD
+  })
+  const minorSources = sources.filter(src => {
+    const contrib = src.score_contribution_percent ?? src.average_similarity_percent
+    return contrib < THRESHOLD
+  })
+
+  function renderTableRow(src: EngineSource, originalIdx: number) {
+    const sev         = _srcTopSeverity(src)
+    const tblBadgeCls = sev === 'identical'      ? styles.badgeExact
+                      : sev === 'highly_similar' ? styles.badgeSimilar
+                      :                            styles.badgePara
+    const tblLabel    = sev === 'identical'      ? 'EXACT'
+                      : sev === 'highly_similar' ? 'SIM.'
+                      :                            'PARA.'
+    const contrib = src.score_contribution_percent
+    return (
+      <div
+        key={src.arxiv_id}
+        className={styles.tableRow}
+        data-gsap="table-row"
+        role="button"
+        tabIndex={0}
+        onClick={() => scrollToSource(originalIdx)}
+        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && scrollToSource(originalIdx)}
+      >
+        <span className={`${styles.badge} ${tblBadgeCls}`}>{tblLabel}</span>
+        <div className={styles.srcCell}>
+          <span className={styles.srcTitle}>{originalIdx + 1}.&nbsp;&nbsp;{src.title || src.arxiv_id}</span>
+          <a
+            href={`https://arxiv.org/abs/${src.arxiv_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.srcLink}
+            onClick={e => e.stopPropagation()}
+          >
+            arxiv.org/abs/{src.arxiv_id}
+          </a>
+        </div>
+        <span className={styles.colCenter}>{src.match_count}</span>
+        <span
+          className={styles.colCenter}
+          style={{ color: scoreColor(contrib ?? src.average_similarity_percent), fontWeight: 700 }}
+        >
+          {contrib != null ? `${contrib.toFixed(1)}%` : `~${src.average_similarity_percent.toFixed(1)}%`}
+        </span>
+      </div>
+    )
+  }
 
   return (
     <div ref={containerRef} className={styles.page}>
@@ -383,28 +415,13 @@ export default function ReportPage() {
 
         <div className={styles.content}>
 
-          {/* ══ COVER ════════════════════════════════════════════════════════ */}
+          {/* ══ COVER ══ */}
           <section className={styles.cover} data-gsap="cover">
-
-            {/* ── Score hero — ring left, meta + stats right ── */}
             <div className={styles.scoreHero}>
 
-              {/* Animated SVG ring with glow */}
               <div className={styles.ringWrap}>
-                <svg
-                  width="168"
-                  height="168"
-                  viewBox="0 0 168 168"
-                  className={styles.ringsvg}
-                >
-                  {/* Track */}
-                  <circle
-                    cx="84" cy="84" r={R}
-                    fill="none"
-                    stroke="rgba(255,255,255,0.07)"
-                    strokeWidth="10"
-                  />
-                  {/* Animated arc with colour glow */}
+                <svg width="168" height="168" viewBox="0 0 168 168" className={styles.ringsvg}>
+                  <circle cx="84" cy="84" r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="10" />
                   <circle
                     ref={arcRef}
                     cx="84" cy="84" r={R}
@@ -417,8 +434,6 @@ export default function ReportPage() {
                     style={{ filter: `drop-shadow(0 0 8px ${sCol}99)` }}
                   />
                 </svg>
-
-                {/* Number overlay */}
                 <div className={styles.ringCenter}>
                   <span className={styles.ringScore} style={{ color: sCol }}>
                     <span ref={scoreNumRef}>0</span>%
@@ -427,16 +442,13 @@ export default function ReportPage() {
                 </div>
               </div>
 
-              {/* Right side: status badge + title + meta + stats */}
               <div className={styles.heroRight}>
-                {/* Status pill */}
                 <div className={styles.statusBadge} data-gsap="cover-badge">
                   <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true">
                     <circle cx="3.5" cy="3.5" r="3.5" fill="#4ade80" />
                   </svg>
                   Analysis complete
                 </div>
-
                 <h1 className={styles.coverTitle}>{filename}</h1>
                 <p className={styles.coverMeta}>
                   {date}
@@ -444,8 +456,6 @@ export default function ReportPage() {
                     <>&nbsp;·&nbsp;Processed in {report.analysis_config.timing.total_s.toFixed(1)}s</>
                   )}
                 </p>
-
-                {/* Stat strip */}
                 <div className={styles.statBar}>
                   {[
                     { val: String(report.total_reported_sources ?? sources.length), lbl: 'Sources', stat: 'sources' },
@@ -463,7 +473,7 @@ export default function ReportPage() {
 
             <hr className={styles.divider} />
 
-            {/* Sources summary table */}
+            {/* ── Sources table with major/minor split ── */}
             {sources.length > 0 && (
               <div className={styles.sourcesTable}>
                 <p className={styles.sectionHeading}>Matched Sources</p>
@@ -473,48 +483,25 @@ export default function ReportPage() {
                   <span>MATCHES</span>
                   <span>DOC COVERAGE</span>
                 </div>
-                {sources.map((src, i) => {
-                  const sev = _srcTopSeverity(src)
-                  const tblBadgeCls = sev === 'identical'      ? styles.badgeExact
-                                    : sev === 'highly_similar' ? styles.badgeSimilar
-                                    :                            styles.badgePara
-                  const tblLabel    = sev === 'identical'      ? 'EXACT'
-                                    : sev === 'highly_similar' ? 'SIM.'
-                                    :                            'PARA.'
-                  const contrib = src.score_contribution_percent
-                  return (
-                    <div
-                      key={src.arxiv_id}
-                      className={styles.tableRow}
-                      data-gsap="table-row"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => scrollToSource(i)}
-                      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && scrollToSource(i)}
+
+                {/* Major sources — always visible */}
+                {majorSources.map(src => renderTableRow(src, sources.indexOf(src)))}
+
+                {/* Minor sources — collapsed by default */}
+                {minorSources.length > 0 && (
+                  <>
+                    {showMinorSources && minorSources.map(src => renderTableRow(src, sources.indexOf(src)))}
+                    <button
+                      type="button"
+                      className={styles.minorToggle}
+                      onClick={() => setShowMinorSources(v => !v)}
                     >
-                      <span className={`${styles.badge} ${tblBadgeCls}`}>{tblLabel}</span>
-                      <div className={styles.srcCell}>
-                        <span className={styles.srcTitle}>{i + 1}.&nbsp;&nbsp;{src.title || src.arxiv_id}</span>
-                        <a
-                          href={`https://arxiv.org/abs/${src.arxiv_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={styles.srcLink}
-                          onClick={e => e.stopPropagation()}
-                        >
-                          arxiv.org/abs/{src.arxiv_id}
-                        </a>
-                      </div>
-                      <span className={styles.colCenter}>{src.match_count}</span>
-                      <span
-                        className={styles.colCenter}
-                        style={{ color: scoreColor(contrib ?? src.average_similarity_percent), fontWeight: 700 }}
-                      >
-                        {contrib != null ? `${contrib.toFixed(1)}%` : `~${src.average_similarity_percent.toFixed(1)}%`}
-                      </span>
-                    </div>
-                  )
-                })}
+                      {showMinorSources
+                        ? `↑ Hide ${minorSources.length} minor source${minorSources.length !== 1 ? 's' : ''}`
+                        : `↓ ${minorSources.length} minor source${minorSources.length !== 1 ? 's' : ''} with <${THRESHOLD}% coverage`}
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -528,28 +515,8 @@ export default function ReportPage() {
             )}
           </section>
 
-          {/* ══ SUBMITTED DOCUMENT ══════════════════════════════════════════ */}
+          {/* ══ SUBMITTED DOCUMENT ══ */}
           <section className={styles.docSection}>
-            <div className={styles.docSectionHeader}>
-              <h2 className={styles.docSectionTitle}>Submitted Document</h2>
-              <p className={styles.docSectionSub}>
-                Exact matched phrases are highlighted
-                <span className={styles.legendChip}>red</span>
-                inline. Click any highlight to jump to its source details.
-              </p>
-              {sources.length > 0 && (
-                <div className={styles.legendRow}>
-                  {sources.map((src, i) => (
-                    <button type="button" key={src.arxiv_id} className={styles.legendChipBtn} onClick={() => scrollToSource(i)}>
-                      <span className={styles.legendDot} />
-                      {i + 1}. {src.title || src.arxiv_id}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Screen: PDF canvas viewer */}
             <div className={styles.screenOnly}>
               <PdfViewer
                 pdfUrl={pdfUrl}
@@ -558,8 +525,6 @@ export default function ReportPage() {
                 onPhraseClick={scrollToSource}
               />
             </div>
-
-            {/* Print: inline highlighted text (canvases don't print) */}
             {(report.display_text || report.full_text) && (
               <div className={styles.printOnly}>
                 <div className={styles.printDocLegend}>
@@ -577,23 +542,23 @@ export default function ReportPage() {
             )}
           </section>
 
-          {/* ══ SOURCE DETAIL SECTIONS ══════════════════════════════════════ */}
+          {/* ══ SOURCE DETAIL SECTIONS ══ */}
           {sources.length > 0 && (
             <div ref={detailsRef}>
               <p className={styles.sectionHeading} style={{ marginBottom: 12 }}>SIMILARITY DETAILS</p>
 
               {sources.map((src, si) => {
-                const sev     = _srcTopSeverity(src)
-                const numCls  = sev === 'identical'      ? styles.numExact
-                              : sev === 'highly_similar' ? styles.numSimilar
-                              :                            styles.numPara
+                const sev      = _srcTopSeverity(src)
+                const numCls   = sev === 'identical'      ? styles.numExact
+                               : sev === 'highly_similar' ? styles.numSimilar
+                               :                            styles.numPara
                 const badgeCls = sev === 'identical'      ? styles.badgeExact
                                : sev === 'highly_similar' ? styles.badgeSimilar
                                :                            styles.badgePara
                 const sevLabel = sev === 'identical'      ? 'EXACT COPY'
                                : sev === 'highly_similar' ? 'HIGHLY SIMILAR'
                                :                            'PARAPHRASE'
-                const contrib  = src.score_contribution_percent
+                const contrib    = src.score_contribution_percent
                 const contribCol = contrib != null
                   ? scoreColor(contrib)
                   : scoreColor(src.average_similarity_percent)
@@ -625,7 +590,6 @@ export default function ReportPage() {
                         </div>
                       </div>
                       <div className={styles.srcHeaderRight}>
-                        {/* Primary: how much of YOUR document this source covers */}
                         <div className={styles.srcMetaStack}>
                           <span className={styles.srcSimBig} style={{ color: contribCol }}>
                             {contrib != null

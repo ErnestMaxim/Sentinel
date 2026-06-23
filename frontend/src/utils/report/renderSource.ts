@@ -2,80 +2,217 @@
 
 import jsPDF from 'jspdf'
 import {
-  C, CW, FONT_BODY, FONT_TINY, LINE_H, ML, MR, MT, PH, PW,
+  C, CW, FONT_BODY, FONT_TINY, FONT_SMALL, LINE_H,
+  ML, MR, MT, PH, PW,
   scoreColor,
 } from './helpers/constants'
 import { pageFooter, pageHeader } from './layout'
 import { addPage, currentPage, fillRounded, strokeRounded, wrap } from './primitives'
 import type { EngineSource, ReportFilter } from './helpers/types'
 
+// ── Source header ─────────────────────────────────────────────────────────────
+
 function drawSourceHeader(doc: jsPDF, src: EngineSource, index: number, y: number): number {
   const isExact = src.has_exact_copies
   const hCol    = isExact ? C.red    : C.purple
   const hBg     = isExact ? C.redBg  : C.purpleBg
-  const H = 22
+  const H       = 20
 
   fillRounded(doc, ML, y, CW, H, 4, hBg)
+  strokeRounded(doc, ML, y, CW, H, 4, hCol, 0.3)
 
-  // Circle — smaller radius, bigger number
-  const R  = 5
-  const CX = ML + 10
-  const CY = y + H / 2
+  // Index circle
   doc.setFillColor(...hCol)
-  doc.circle(CX, CY, R, 'F')
+  doc.circle(ML + 9, y + H / 2, 5, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(8)
   doc.setTextColor(...C.white)
-  doc.text(String(index + 1), CX, CY + 3.6, { align: 'center' })
+  doc.text(String(index + 1), ML + 9, y + H / 2 + 3, { align: 'center' })
 
-  // Detection chip
-  fillRounded(doc, ML + 19, y + 6.5, 26, 6, 3, hCol)
+  // Type chip
+  fillRounded(doc, ML + 18, y + 6, 24, 7, 2, hCol)
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(5.5)
+  doc.setFontSize(5)
   doc.setTextColor(...C.white)
-  doc.text(isExact ? 'EXACT COPY' : 'PARAPHRASE', ML + 32, y + 11, { align: 'center' })
+  doc.text(isExact ? 'EXACT COPY' : 'PARAPHRASE', ML + 30, y + 11, { align: 'center' })
 
   // Title
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(FONT_SMALL)
   doc.setTextColor(...C.textMain)
   const titleW = CW - 90
   const titleLines = wrap(doc, src.title || src.arxiv_id, titleW)
-  doc.text(titleLines[0], ML + 49, y + 10)
+  doc.text(titleLines[0], ML + 46, y + 9)
 
   // arXiv link
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textDim)
-  doc.text(`arxiv.org/abs/${src.arxiv_id}`, ML + 49, y + 16.5)
-  doc.link(ML + 49, y + 13, 70, 5, { url: `https://arxiv.org/abs/${src.arxiv_id}` })
+  doc.text(`arxiv.org/abs/${src.arxiv_id}`, ML + 46, y + 15)
+  doc.link(ML + 46, y + 12, 65, 4, { url: `https://arxiv.org/abs/${src.arxiv_id}` })
 
   // Similarity — right
+  const contrib = src.score_contribution_percent ?? src.average_similarity_percent
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.setTextColor(...scoreColor(src.average_similarity_percent))
-  doc.text(`${src.average_similarity_percent.toFixed(1)}%`, PW - MR - 3, y + 12, { align: 'right' })
+  doc.setFontSize(14)
+  doc.setTextColor(...scoreColor(contrib))
+  doc.text(`${contrib.toFixed(1)}%`, PW - MR - 2, y + 11, { align: 'right' })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textDim)
-  doc.text(`${src.match_count} match${src.match_count !== 1 ? 'es' : ''}`, PW - MR - 3, y + 19, { align: 'right' })
+  doc.text(`${src.match_count} match${src.match_count !== 1 ? 'es' : ''}`, PW - MR - 2, y + 17, { align: 'right' })
 
-  return y + H + 5
+  return y + H + 6
 }
 
-function estimateMatchHeight(doc: jsPDF, queryText: string, dbText: string | undefined, phrases: string[]): number {
-  const yourLines = wrap(doc, queryText || '', CW - 12)
-  const dbLines   = dbText ? wrap(doc, dbText, CW - 14) : []
-  const phLines   = phrases.flatMap(ph => wrap(doc, `"${ph}"`, CW - 14))
-  return (
-    10 + 5
-    + 3 + yourLines.length * LINE_H + 10 + 5
-    + (dbLines.length ? 3 + dbLines.length * LINE_H + 10 + 5 : 0)
-    + (phLines.length ? 3 + phLines.length * 4 + 5 : 0)
-    + 8
+// ── Match card — side-by-side diff layout ─────────────────────────────────────
+
+function drawMatchCard(
+  doc:       jsPDF,
+  m:         { query_text: string; db_text?: string; match_percentage: number; detection?: string; exact_copied_phrases?: string[] },
+  index:     number,
+): number {
+  const phrases = m.exact_copied_phrases ?? []
+
+  // Column widths for side-by-side layout
+  const COL_GAP = 3
+  const COL_W   = (CW - COL_GAP) / 2
+
+  // Pre-wrap text in each column
+  const yourLines = wrap(doc, m.query_text || '', COL_W - 8)
+  const dbLines   = m.db_text ? wrap(doc, m.db_text, COL_W - 8) : []
+  const maxLines  = Math.max(yourLines.length, dbLines.length, 1)
+  const textH     = maxLines * LINE_H + 10
+
+  // Phrases row height
+  const phLines = phrases.flatMap(ph => wrap(doc, `"${ph}"`, COL_W - 4))
+  const phH     = phLines.length > 0 ? phLines.length * 4.2 + 10 : 0
+
+  // Total card height: header pill + columns + optional phrases
+  const CARD_H = 9 + 4 + textH + (phH > 0 ? phH + 3 : 0) + 4
+
+  return CARD_H
+}
+
+function renderMatchCard(
+  doc:       jsPDF,
+  m:         { query_text: string; db_text?: string; match_percentage: number; detection?: string; exact_copied_phrases?: string[] },
+  index:     number,
+  y:         number,
+): number {
+  const isParaphrase = m.detection === 'paraphrase'
+  const mCol   = isParaphrase ? C.purple   : C.red
+  const mBg    = isParaphrase ? C.purpleBg : C.redBg
+  const phrases = m.exact_copied_phrases ?? []
+
+  const COL_GAP = 3
+  const COL_W   = (CW - COL_GAP) / 2
+
+  const yourLines = wrap(doc, m.query_text || '', COL_W - 8)
+  const dbLines   = m.db_text ? wrap(doc, m.db_text, COL_W - 8) : []
+  const maxLines  = Math.max(yourLines.length, dbLines.length, 1)
+  const textH     = maxLines * LINE_H + 10
+  const phLines   = phrases.flatMap(ph => wrap(doc, `"${ph}"`, CW - 8))
+  const phH       = phLines.length > 0 ? phLines.length * 4.2 + 10 : 0
+  const CARD_H    = 9 + 4 + textH + (phH > 0 ? phH + 3 : 0) + 4
+
+  // ── Card border ───────────────────────────────────────────────────────────
+  strokeRounded(doc, ML, y, CW, CARD_H, 3, C.border, 0.2)
+
+  // ── Header row ────────────────────────────────────────────────────────────
+  fillRounded(doc, ML, y, CW, 9, 3, C.cardBg)
+
+  // Index + type badge
+  doc.setFillColor(...mCol)
+  doc.circle(ML + 5, y + 4.5, 1.5, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6)
+  doc.setTextColor(...C.textMuted)
+  doc.text(`${index + 1}.`, ML + 9, y + 6)
+
+  fillRounded(doc, ML + 14, y + 1.5, 22, 6, 2, mBg)
+  strokeRounded(doc, ML + 14, y + 1.5, 22, 6, 2, mCol, 0.3)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5)
+  doc.setTextColor(...mCol)
+  doc.text(isParaphrase ? 'Paraphrase' : 'Exact copy', ML + 25, y + 5.8, { align: 'center' })
+
+  // Similarity pill — right
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6)
+  doc.setTextColor(...C.textMuted)
+  doc.text(`${m.match_percentage.toFixed(1)}% similarity`, PW - MR, y + 6, { align: 'right' })
+
+  // Divider under header
+  doc.setDrawColor(...C.border)
+  doc.setLineWidth(0.15)
+  doc.line(ML, y + 9, PW - MR, y + 9)
+
+  let contentY = y + 9 + 4
+
+  // ── Column labels ─────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5)
+  doc.setTextColor(...C.textDim)
+  doc.text('YOUR TEXT', ML + 2, contentY)
+  if (dbLines.length > 0)
+    doc.text('MATCHED SOURCE', ML + COL_W + COL_GAP + 2, contentY)
+  contentY += 3
+
+  // ── Left column: your text ────────────────────────────────────────────────
+  fillRounded(doc, ML, contentY, COL_W, textH, 2, C.cardBg)
+  strokeRounded(doc, ML, contentY, COL_W, textH, 2, C.border, 0.15)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(FONT_BODY)
+  doc.setTextColor(...C.textMain)
+  yourLines.forEach((line, li) =>
+    doc.text(line, ML + 4, contentY + 5.5 + li * LINE_H)
   )
+
+  // ── Right column: matched source ──────────────────────────────────────────
+  if (dbLines.length > 0) {
+    const rx = ML + COL_W + COL_GAP
+    fillRounded(doc, rx, contentY, COL_W, textH, 2, mBg)
+    strokeRounded(doc, rx, contentY, COL_W, textH, 2, mCol, 0.2)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(FONT_BODY)
+    doc.setTextColor(...C.textMain)
+    dbLines.forEach((line, li) =>
+      doc.text(line, rx + 4, contentY + 5.5 + li * LINE_H)
+    )
+  }
+
+  contentY += textH + 3
+
+  // ── Exact phrases row ─────────────────────────────────────────────────────
+  if (phLines.length > 0) {
+    doc.setDrawColor(...C.border)
+    doc.setLineWidth(0.15)
+    doc.line(ML, contentY, PW - MR, contentY)
+    contentY += 3
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(5)
+    doc.setTextColor(...C.red)
+    doc.text('EXACT PHRASES', ML + 2, contentY)
+    contentY += 3.5
+
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...C.red)
+    phLines.forEach(line => {
+      doc.text(line, ML + 3, contentY)
+      contentY += 4.2
+    })
+  }
+
+  return y + CARD_H + 5
 }
+
+// ── Main source renderer ──────────────────────────────────────────────────────
 
 export function renderSource(
   doc:          jsPDF,
@@ -109,13 +246,7 @@ export function renderSource(
   }
 
   filteredMatches.forEach((m, mi) => {
-    const isParaphrase = m.detection === 'paraphrase'
-    const mCol    = isParaphrase ? C.purple   : C.red
-    const mBg     = isParaphrase ? C.purpleBg : C.redBg
-    const phrases = m.exact_copied_phrases ?? []
-    const yourLines = wrap(doc, m.query_text || '', CW - 12)
-    const dbLines   = m.db_text ? wrap(doc, m.db_text, CW - 14) : []
-    const estH = estimateMatchHeight(doc, m.query_text, m.db_text, phrases)
+    const estH = drawMatchCard(doc, m, mi)
 
     if (y + estH > PH - 16) {
       addPage(doc)
@@ -125,89 +256,6 @@ export function renderSource(
       y = MT + 6
     }
 
-    // ── Match header pill ─────────────────────────────────────────────────
-    fillRounded(doc, ML, y, CW, 9, 4, C.cardBg)
-    strokeRounded(doc, ML, y, CW, 9, 4, C.border, 0.2)
-
-    // Small dot — vertically centered in the 9mm pill
-    doc.setFillColor(...mCol)
-    doc.circle(ML + 6, y + 4.5, 1.8, 'F')
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...C.textMain)
-    doc.text(`${mi + 1}.  ${isParaphrase ? 'Paraphrase' : 'Exact match'}`, ML + 11, y + 5.8)
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(FONT_TINY)
-    doc.setTextColor(...C.textDim)
-    doc.text(`${m.match_percentage.toFixed(1)}% similarity`, PW - MR - 3, y + 5.8, { align: 'right' })
-
-    y += 13
-
-    // ── YOUR TEXT ─────────────────────────────────────────────────────────
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(5.5)
-    doc.setTextColor(...C.textDim)
-    doc.text('YOUR TEXT', ML + 1, y)
-    y += 2.5
-
-    const yourH = yourLines.length * LINE_H + 10
-    fillRounded(doc, ML, y, CW, yourH, 3, C.cardBg)
-    strokeRounded(doc, ML, y, CW, yourH, 3, C.border, 0.2)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(FONT_BODY)
-    doc.setTextColor(...C.textMain)
-    yourLines.forEach((line, li) => doc.text(line, ML + 5, y + 5.5 + li * LINE_H))
-    y += yourH + 5
-
-    // ── MATCHED SOURCE ────────────────────────────────────────────────────
-    if (dbLines.length) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(5.5)
-      doc.setTextColor(...C.textDim)
-      doc.text('MATCHED SOURCE', ML + 1, y)
-      y += 2.5
-
-      const dbH = dbLines.length * LINE_H + 10
-
-      // Soft tinted card — no border stroke
-      fillRounded(doc, ML, y, CW, dbH, 3, mBg)
-
-      // Left accent bar — offset 1mm from left edge so rounded corners show
-      doc.setFillColor(...mCol)
-      doc.roundedRect(ML + 0.8, y + 2, 2.5, dbH - 4, 1, 1, 'F')
-
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(FONT_BODY)
-      doc.setTextColor(...C.textMain)
-      // Text starts after the accent bar with padding
-      dbLines.forEach((line, li) => doc.text(line, ML + 6, y + 5.5 + li * LINE_H))
-      y += dbH + 5
-    }
-
-    // ── EXACT PHRASES ─────────────────────────────────────────────────────
-    if (phrases.length) {
-      const phLines = phrases.flatMap(ph => wrap(doc, `"${ph}"`, CW - 14))
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(5.5)
-      doc.setTextColor(...C.red)
-      doc.text('EXACT PHRASES', ML + 1, y)
-      y += 2.5
-
-      doc.setFont('helvetica', 'italic')
-      doc.setFontSize(7.5)
-      doc.setTextColor(...C.red)
-      phLines.forEach(line => { doc.text(line, ML + 3, y); y += 4 })
-      y += 3
-    }
-
-    // Separator
-    y += 2
-    doc.setDrawColor(...C.border)
-    doc.setLineWidth(0.2)
-    doc.line(ML, y, PW - MR, y)
-    y += 8
+    y = renderMatchCard(doc, m, mi, y)
   })
 }

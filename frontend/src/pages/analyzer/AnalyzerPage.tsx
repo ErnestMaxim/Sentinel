@@ -4,13 +4,14 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { generatePdfReport, type ReportFilter } from '../../utils/report'
-import { useDocumentAnalysis } from './hooks/useDocumentAnalysis'
 import ScoreRing from './components/ScoreRing'
 import MorphIcon from '../../components/ui/MorphIcon'
 import MagneticButton from '../../components/ui/MagneticButton'
 import { useTilt } from '../../hooks/useTilt'
 import styles from './Analyzer.module.css'
 import { REPORT_STORAGE_KEY, type StoredReport } from '../report/ReportPage'
+import { useAnalysis } from '../../context/AnalysisContext'
+
 
 gsap.registerPlugin(ScrollTrigger)
  
@@ -26,12 +27,13 @@ const STEPS = [
 export default function AnalyzerPage() {
 
   const navigate       = useNavigate()
-  const analysis       = useDocumentAnalysis()
+  const analysis       = useAnalysis()
   const inputRef       = useRef<HTMLInputElement>(null)
   const sourceListRef  = useRef<HTMLDivElement>(null)
   const doneRef        = useRef<HTMLDivElement>(null)
   const [downloading,  setDownloading]  = useState(false)
   const [reportFilter, setReportFilter] = useState<ReportFilter>('all')
+  const [dragging,     setDragging]     = useState(false)
 
   const tilt = useTilt<HTMLDivElement>(8)
 
@@ -72,7 +74,7 @@ export default function AnalyzerPage() {
     navigate('/report')
   }
 
-  const { setDragging, acceptFile, analyze, reset } = analysis
+  const { acceptFile, analyze, reset } = analysis
 
   function onDragOver(e: React.DragEvent) {
     e.preventDefault()
@@ -101,7 +103,7 @@ export default function AnalyzerPage() {
     setDownloading(false)
   }
  
-  const { file, dragging, stage, pipeStep, report, docInfo, errorMsg, isRunning } = analysis
+  const { file, stage, pipeStep, report, docInfo, errorMsg, isRunning } = analysis
 
   return (
     <div className={styles.page}>
