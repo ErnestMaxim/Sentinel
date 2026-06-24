@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import { C, PH, PW } from './helpers/constants'
 import { fillRect } from './primitives'
 import { renderCover } from './renderCover'
-import { renderDocumentView } from '../report/renderDocument.ts'
+import { renderDocumentView } from './renderDocument.ts'
 import { renderSource } from './renderSource'
 import type { EngineReport, ReportFilter } from './helpers/types'
 
