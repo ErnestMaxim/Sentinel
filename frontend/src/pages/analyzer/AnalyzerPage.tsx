@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { generatePdfReport, type ReportFilter } from '../../utils/report'
+import { generatePdfReport } from '../../utils/report'
 import ScoreRing from './components/ScoreRing'
 import MorphIcon from '../../components/ui/MorphIcon'
 import MagneticButton from '../../components/ui/MagneticButton'
@@ -14,7 +14,7 @@ import { useAnalysis } from '../../context/AnalysisContext'
 
 
 gsap.registerPlugin(ScrollTrigger)
- 
+
 const STEPS = [
   { label: 'Uploading file'        },
   { label: 'Extracting text'       },
@@ -23,17 +23,16 @@ const STEPS = [
   { label: 'Searching index'       },
   { label: 'Ranking sources'       },
 ]
- 
+
 export default function AnalyzerPage() {
 
-  const navigate       = useNavigate()
-  const analysis       = useAnalysis()
-  const inputRef       = useRef<HTMLInputElement>(null)
-  const sourceListRef  = useRef<HTMLDivElement>(null)
-  const doneRef        = useRef<HTMLDivElement>(null)
-  const [downloading,  setDownloading]  = useState(false)
-  const [reportFilter, setReportFilter] = useState<ReportFilter>('all')
-  const [dragging,     setDragging]     = useState(false)
+  const navigate      = useNavigate()
+  const analysis      = useAnalysis()
+  const inputRef      = useRef<HTMLInputElement>(null)
+  const sourceListRef = useRef<HTMLDivElement>(null)
+  const doneRef       = useRef<HTMLDivElement>(null)
+  const [downloading, setDownloading] = useState(false)
+  const [dragging,    setDragging]    = useState(false)
 
   const tilt = useTilt<HTMLDivElement>(8)
 
@@ -55,13 +54,12 @@ export default function AnalyzerPage() {
         clearProps: 'filter',
       }
     )
-    // Hero metrics count up
     const doneHero = doneRef.current?.querySelector('[data-done-hero]')
     if (doneHero) {
       gsap.from(doneHero, { opacity: 0, y: 20, duration: 0.6, ease: 'power3.out' })
     }
   }, { dependencies: [analysis.stage], scope: doneRef })
- 
+
   function handleViewReport() {
     if (!analysis.report || !analysis.docInfo) return
     const stored: StoredReport = {
@@ -74,34 +72,35 @@ export default function AnalyzerPage() {
     navigate('/report')
   }
 
+  async function handleDownload() {
+    if (!analysis.report || !analysis.docInfo) return
+    setDownloading(true)
+    try {
+      await generatePdfReport(analysis.report, analysis.docInfo.filename, 'all')
+    } catch {
+      // swallow — download failure is non-critical
+    }
+    setDownloading(false)
+  }
+
   const { acceptFile, analyze, reset } = analysis
 
   function onDragOver(e: React.DragEvent) {
     e.preventDefault()
     setDragging(true)
   }
- 
+
   function onDragLeave() {
     setDragging(false)
   }
- 
+
   function onDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
     const f = e.dataTransfer.files[0]
     if (f) acceptFile(f)
   }
- 
-  async function handleReDownload() {
-    if (!analysis.report || !analysis.docInfo) return
-    setDownloading(true)
-    try {
-      await generatePdfReport(analysis.report, analysis.docInfo.filename, reportFilter)
-    } catch {
-    }
-    setDownloading(false)
-  }
- 
+
   const { file, stage, pipeStep, report, docInfo, errorMsg, isRunning } = analysis
 
   return (
@@ -122,8 +121,8 @@ export default function AnalyzerPage() {
                 <div className={styles.doneStats}>
                   {[
                     { v: `${(report.global_plagiarism_score_percent ?? 0).toFixed(1)}%`, k: 'Similarity' },
-                    { v: String(report.total_reported_sources ?? report.sources?.length ?? 0),          k: 'Sources'  },
-                    { v: (report.document_stats?.total_words ?? 0).toLocaleString(),                    k: 'Words'    },
+                    { v: String(report.total_reported_sources ?? report.sources?.length ?? 0),         k: 'Sources' },
+                    { v: (report.document_stats?.total_words ?? 0).toLocaleString(),                   k: 'Words'   },
                   ].map(s => (
                     <div key={s.k} className={styles.doneStat}>
                       <span className={styles.doneStatV}>{s.v}</span>
@@ -139,25 +138,15 @@ export default function AnalyzerPage() {
               {downloading ? 'Generating PDF report…' : 'PDF report downloaded automatically.'}
             </div>
 
-            <button type="button" className={styles.viewReportBtn} onClick={handleViewReport}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              View full report online
-            </button>
+            <div className={styles.actionRow}>
+              <button type="button" className={styles.viewReportBtn} onClick={handleViewReport}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                View full report online
+              </button>
 
-            <div className={styles.redownloadBar}>
-              <span className={styles.rdLabel}>Download with filter:</span>
-              <div className={styles.filterPills}>
-                {(['all', 'exact', 'paraphrase'] as ReportFilter[]).map(f => (
-                  <button key={f} type="button"
-                    className={`${styles.pill} ${reportFilter === f ? styles.pillActive : ''}`}
-                    onClick={() => setReportFilter(f)}>
-                    {f === 'all' ? 'All matches' : f === 'exact' ? 'Exact only' : 'Paraphrase only'}
-                  </button>
-                ))}
-              </div>
-              <button type="button" className={styles.dlBtn} onClick={handleReDownload} disabled={downloading}>
+              <button type="button" className={styles.dlBtn} onClick={handleDownload} disabled={downloading}>
                 {downloading
-                  ? <span className={styles.dlSpin}/>
+                  ? <span className={styles.dlSpin} />
                   : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
                 {downloading ? 'Generating…' : 'Download PDF'}
               </button>
@@ -209,7 +198,6 @@ export default function AnalyzerPage() {
         ) : (
           /* ── Upload / analyzing view ── */
           <div className={styles.uploadWrap}>
-            {/* useTilt gives a subtle 3-D perspective tilt on hover */}
             <div
               className={styles.uploadCard}
               ref={tilt.ref}
@@ -229,14 +217,11 @@ export default function AnalyzerPage() {
 
               {!isRunning && (
                 <>
-                  {/* Hidden file input — shared by both states below */}
                   <input ref={inputRef} type="file" accept=".pdf,.docx,.txt"
                     style={{ display: 'none' }}
                     onChange={e => e.target.files?.[0] && acceptFile(e.target.files[0])} />
 
                   {file ? (
-                    // File selected: plain div so the clear <button> is not nested
-                    // inside another interactive element (invalid HTML).
                     <div
                       className={`${styles.dropZone} ${styles.dropZoneFile}`}
                       onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
@@ -254,7 +239,6 @@ export default function AnalyzerPage() {
                       </div>
                     </div>
                   ) : (
-                    // No file: real <button> — no nested interactive elements.
                     <button
                       type="button"
                       className={`${styles.dropZone} ${dragging ? styles.dropZoneActive : ''}`}
@@ -263,7 +247,6 @@ export default function AnalyzerPage() {
                       aria-label="Upload document — click or drop a file here"
                     >
                       <div className={styles.dropEmpty}>
-                        {/* MorphIcon replaces the static SVG — shows upload or drag state */}
                         <div className={styles.dropIcon}>
                           <MorphIcon
                             phase={dragging ? 'uploading' : 'idle'}
@@ -280,12 +263,11 @@ export default function AnalyzerPage() {
               )}
 
               {isRunning && (() => {
-                const stepIndex  = stage === 'uploading' ? 0 : pipeStep
-                const stepLabel  = STEPS[stepIndex]?.label ?? STEPS[0].label
-                const stepNum    = Math.min(stepIndex + 1, STEPS.length)
+                const stepIndex = stage === 'uploading' ? 0 : pipeStep
+                const stepLabel = STEPS[stepIndex]?.label ?? STEPS[0].label
+                const stepNum   = Math.min(stepIndex + 1, STEPS.length)
                 return (
                   <div className={styles.pipeline}>
-                    {/* Status header — MorphIcon replaces the CSS spinner */}
                     <div className={styles.pipeHeader}>
                       <MorphIcon
                         phase={stage === 'uploading' ? 'uploading' : 'analyzing'}
@@ -294,7 +276,6 @@ export default function AnalyzerPage() {
                       <span>{stage === 'uploading' ? 'Uploading…' : 'Analyzing document…'}</span>
                     </div>
 
-                    {/* Current step — large, animated on change */}
                     <div className={styles.pipeStatus}>
                       <span key={`${stage}-${stepIndex}`} className={styles.pipeStatusLabel}>
                         {stepLabel}
@@ -304,7 +285,6 @@ export default function AnalyzerPage() {
                       </span>
                     </div>
 
-                    {/* Progress segments — one per step */}
                     <div className={styles.pipeSteps}>
                       {STEPS.map((_, i) => {
                         const done   = stage === 'analyzing' && i < stepIndex
@@ -335,7 +315,6 @@ export default function AnalyzerPage() {
               )}
 
               {file && !isRunning && (
-                /* MagneticButton: inner content follows cursor; springs back on leave */
                 <MagneticButton className={styles.analyzeBtn} onClick={analyze}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   Run plagiarism check

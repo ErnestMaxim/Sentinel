@@ -8,39 +8,58 @@ export function pageHeader(
   pageNum:    number,
   totalPages: number,
 ) {
-  // Clean white header — just a subtle bottom border
-  fillRect(doc, 0, 0, PW, 12, C.pageBg)
+  const H = 14
+
+  // Background
+  fillRect(doc, 0, 0, PW, H, C.pageBg)
+
+  // Yellow left accent bar
+  fillRect(doc, 0, 0, 4, H, C.yellow)
+
+  // Bottom border
   doc.setDrawColor(...C.border)
-  doc.setLineWidth(0.25)
-  doc.line(0, 12, PW, 12)
+  doc.setLineWidth(0.3)
+  doc.line(0, H, PW, H)
 
-  // Wordmark — small, yellow
+  // Wordmark
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  doc.setTextColor(...C.yellowText)
-  doc.text('SENTINEL', ML, 8)
+  doc.setFontSize(8)
+  doc.setTextColor(...C.textMain)
+  doc.text('SENTINEL', ML, H / 2 + 2.5)
 
-  // Doc name
+  // Separator dot
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textDim)
-  const nameLines = wrap(doc, docName, CW - 40)
-  doc.text(nameLines[0], ML + 20, 8)
+  doc.text('·', ML + 22, H / 2 + 2.5)
 
-  // Page counter
+  // Doc name
+  const nameMaxW = CW - 50
+  const nameLines = wrap(doc, docName, nameMaxW)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(FONT_TINY)
+  doc.setTextColor(...C.textMuted)
+  doc.text(nameLines[0], ML + 27, H / 2 + 2.5)
+
+  // Page counter — right aligned
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textDim)
-  doc.text(`${pageNum} / ${totalPages}`, PW - MR, 8, { align: 'right' })
+  doc.text(`${pageNum} / ${totalPages}`, PW - MR, H / 2 + 2.5, { align: 'right' })
 }
 
 export function pageFooter(doc: jsPDF, submissionId: string, date: string) {
-  fillRect(doc, 0, PH - 10, PW, 10, C.pageBg)
+  const H = 10
+
+  fillRect(doc, 0, PH - H, PW, H, C.pageBg)
+
   doc.setDrawColor(...C.border)
-  doc.setLineWidth(0.25)
-  doc.line(0, PH - 10, PW, PH - 10)
+  doc.setLineWidth(0.3)
+  doc.line(0, PH - H, PW, PH - H)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textDim)
-  doc.text(`ID: ${submissionId}`, ML, PH - 4)
-  doc.text(date, PW - MR, PH - 4, { align: 'right' })
+  doc.text(`ID: ${submissionId}`, ML, PH - 3.5)
+  doc.text(date, PW - MR, PH - 3.5, { align: 'right' })
 }

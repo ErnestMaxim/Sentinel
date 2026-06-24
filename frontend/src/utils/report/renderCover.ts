@@ -8,6 +8,8 @@ import { pageFooter, pageHeader } from './layout'
 import { fillRounded, strokeRounded, wrap } from './primitives'
 import type { EngineReport, ReportFilter } from './helpers/types'
 
+const COVER_MAX_ROWS = 12
+
 export function renderCover(
   doc:          jsPDF,
   data:         EngineReport,
@@ -31,8 +33,8 @@ export function renderCover(
   y += 6
 
   const filterLabel =
-    filter === 'exact'      ? 'Exact matches only'
-    : filter === 'paraphrase' ? 'Paraphrases only'
+    filter === 'exact'       ? 'Exact matches only'
+    : filter === 'paraphrase'? 'Paraphrases only'
     : 'All matches'
 
   doc.setFont('helvetica', 'normal')
@@ -47,19 +49,19 @@ export function renderCover(
   const sBg    = scoreBgColor(sim)
   const sMuted = scoreMutedColor(sim)
 
-  // Ring — mimics the app's SVG ring
   const R   = 18
   const CX  = ML + R + 2
   const CY  = y + R + 2
 
-  // Track circle (light bg)
+  // Track circle
   doc.setFillColor(...sBg)
   doc.circle(CX, CY, R, 'F')
   doc.setDrawColor(...sMuted)
   doc.setLineWidth(0.5)
   doc.circle(CX, CY, R, 'S')
 
-  const arcPct  = Math.min(sim / 100, 1)
+  // Arc drawn as thick line segments
+  const arcPct   = Math.min(sim / 100, 1)
   const arcStart = -Math.PI / 2
   const arcEnd   = arcStart + arcPct * 2 * Math.PI
   const SEGS     = 60
@@ -78,7 +80,7 @@ export function renderCover(
   }
   doc.setLineWidth(0.25)
 
-  // Score number centered in ring
+  // Score number
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(13)
   doc.setTextColor(...sCol)
@@ -89,7 +91,7 @@ export function renderCover(
   doc.setTextColor(...sMuted)
   doc.text('SIMILARITY', CX, CY + 7, { align: 'center' })
 
-  // Stat strip — 3 cells to the right of the ring, bordered like the app
+  // Stat strip
   const STRIP_X = CX + R + 10
   const STRIP_W = PW - MR - STRIP_X
   const STRIP_H = (R + 2) * 2
@@ -101,13 +103,11 @@ export function renderCover(
     { val: (data.document_stats?.total_words ?? 0).toLocaleString(),         lbl: 'Words'   },
   ]
 
-  // Strip border
   strokeRounded(doc, STRIP_X, y, STRIP_W, STRIP_H, 4, C.border, 0.3)
 
   stats.forEach((s, i) => {
     const cx = STRIP_X + i * CELL_W + CELL_W / 2
 
-    // Vertical divider between cells
     if (i > 0) {
       doc.setDrawColor(...C.border)
       doc.setLineWidth(0.25)
@@ -127,7 +127,7 @@ export function renderCover(
 
   y = CY + R + 12
 
-  // ── Thin divider ───────────────────────────────────────────────────────────
+  // ── Divider ────────────────────────────────────────────────────────────────
   doc.setDrawColor(...C.border)
   doc.setLineWidth(0.25)
   doc.line(ML, y, PW - MR, y)
@@ -144,11 +144,21 @@ export function renderCover(
     return
   }
 
-  // ── Matched sources table ──────────────────────────────────────────────────
+  // ── Matched sources table — capped at COVER_MAX_ROWS ──────────────────────
+  const coverSources  = data.sources.slice(0, COVER_MAX_ROWS)
+  const hiddenCount   = data.sources.length - coverSources.length
+
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textMuted)
   doc.text('MATCHED SOURCES', ML, y)
+
+  if (hiddenCount > 0) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(FONT_TINY)
+    doc.setTextColor(...C.textDim)
+    doc.text(`top ${COVER_MAX_ROWS} of ${data.sources.length} — see detail pages`, ML + 42, y)
+  }
   y += 5
 
   // Table header row
@@ -157,36 +167,23 @@ export function renderCover(
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(FONT_TINY)
   doc.setTextColor(...C.textDim)
-  doc.text('TYPE',    ML + 3,        y + 5)
-  doc.text('SOURCE',  ML + 26,       y + 5)
-  doc.text('MATCHES', PW - MR - 26,  y + 5, { align: 'right' })
-  doc.text('COVERAGE',PW - MR,       y + 5, { align: 'right' })
+  doc.text('TYPE',     ML + 3,       y + 5)
+  doc.text('SOURCE',   ML + 26,      y + 5)
+  doc.text('MATCHES',  PW - MR - 26, y + 5, { align: 'right' })
+  doc.text('COVERAGE', PW - MR,      y + 5, { align: 'right' })
   y += 9
 
-  data.sources.forEach((src, i) => {
-    if (y > PH - 16) return
+  coverSources.forEach((src, i) => {
+    if (y > PH - 20) return
 
-    const ROW_H = 14
-    const isLast = i === data.sources.length - 1
+    const ROW_H  = 14
 
-    // Row background
     if (i % 2 === 1) fillRounded(doc, ML, y, CW, ROW_H, 0, C.cardBg)
 
-    // Bottom divider
-    if (!isLast) {
-      doc.setDrawColor(...C.border)
-      doc.setLineWidth(0.15)
-      doc.line(ML, y + ROW_H, PW - MR, y + ROW_H)
-    } else {
-      doc.setDrawColor(...C.border)
-      doc.setLineWidth(0.15)
-      doc.line(ML, y + ROW_H, PW - MR, y + ROW_H)
-    }
-
-    // Left + right border for the table body
     doc.setDrawColor(...C.border)
     doc.setLineWidth(0.15)
-    if (i === 0) doc.line(ML, y, PW - MR, y) // top of first row
+    if (i === 0) doc.line(ML, y, PW - MR, y)
+    doc.line(ML, y + ROW_H, PW - MR, y + ROW_H)
 
     // Detection badge
     const isExact  = src.has_exact_copies
@@ -204,7 +201,7 @@ export function renderCover(
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(FONT_SMALL)
     doc.setTextColor(...C.textMain)
-    const titleMaxW = CW - 70
+    const titleMaxW  = CW - 70
     const titleLines = wrap(doc, `${i + 1}.  ${src.title || src.arxiv_id}`, titleMaxW)
     doc.text(titleLines[0], ML + 26, y + 6.5)
 
@@ -230,4 +227,17 @@ export function renderCover(
 
     y += ROW_H
   })
+
+  // "…and N more" footer row if truncated
+  if (hiddenCount > 0) {
+    fillRounded(doc, ML, y, CW, 9, 2, C.cardBg)
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(FONT_TINY)
+    doc.setTextColor(...C.textDim)
+    doc.text(
+      `…and ${hiddenCount} more source${hiddenCount !== 1 ? 's' : ''} — see individual detail pages`,
+      ML + CW / 2, y + 6,
+      { align: 'center' },
+    )
+  }
 }
