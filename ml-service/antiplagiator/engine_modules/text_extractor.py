@@ -150,38 +150,61 @@ class TextExtractor:
         return raw_text
 
     def _extract_pdf_text(self, file_path: Path) -> str:
+        pages_text: list[str] = []
+
         with fitz.open(file_path) as doc:
-            raw = " ".join(p.get_text("text") for p in doc)
+            for page in doc:
+                page_width = page.rect.width
+                blocks = page.get_text("blocks")  # list of (x0,y0,x1,y1,text,block_no,block_type)
+
+                # Filter to text blocks only (block_type == 0)
+                text_blocks = [b for b in blocks if b[6] == 0 and b[4].strip()]
+
+                # Detect two-column layout: if there are blocks clearly split
+                # around the horizontal midpoint, sort left-col first.
+                midpoint = page_width / 2
+                left  = [b for b in text_blocks if b[2] <= midpoint + 20]
+                right = [b for b in text_blocks if b[0] >= midpoint - 20]
+
+                if left and right and len(right) > 1:
+                    # Two-column: sort each column top-to-bottom, left before right
+                    left_sorted  = sorted(left,  key=lambda b: b[1])
+                    right_sorted = sorted(right, key=lambda b: b[1])
+                    ordered = left_sorted + right_sorted
+                else:
+                    # Single column: sort top-to-bottom, left-to-right
+                    ordered = sorted(text_blocks, key=lambda b: (round(b[1] / 20), b[0]))
+
+                pages_text.append(" ".join(b[4] for b in ordered))
+
+        raw = " ".join(pages_text)
         raw = re.sub(r'[\x00-\x1F\x7F-\x9F]', ' ', raw)
         raw = re.sub(r'\s+', ' ', raw).strip()
 
-        # Strip trailing reference / bibliography sections.
+        # Strip reference section — only when it appears after 40% of the document
+        # to avoid clipping the body when "References" is mentioned in the intro.
         _REF_SECTION = re.compile(
-            r'(?<!\w)'                             # not preceded by a word char
-            r'(References?|Bibliography|Endnotes?|Notes?|Works\s+Cited)'
-            r'(?!\w)',                             # not followed by a word char
+            r'(?<!\w)(References?|Bibliography|Endnotes?|Notes?|Works\s+Cited)(?!\w)',
             re.IGNORECASE,
         )
         m = _REF_SECTION.search(raw)
         if m:
-            # Only strip if the keyword is acting as a section heading
             tail = raw[m.end(): m.end() + 200]
             looks_like_bib = bool(re.search(
                 r'^\s*[\[\(]?\d|^\s*[A-Z][a-z]+\s+[A-Z]|doi:|http',
                 tail,
             ))
-            if looks_like_bib or m.start() > len(raw) * 0.20:
+            # Raised threshold: 0.20 → 0.40 to avoid clipping intro mentions
+            if looks_like_bib or m.start() > len(raw) * 0.40:
                 raw = raw[:m.start()]
 
-        # Additionally strip numbered footnote / endnote blocks anywhere in the text. 
+        # Strip numbered footnote/endnote blocks
         _FOOTNOTE_BLOCK = re.compile(
-            # Two or more consecutive numbered items: "24. ... 25. ..."
             r'(?<!\d)(\d{1,3})\.\s+\S.{0,300}?(?<!\d)(\d{1,3})\.\s+\S',
             re.DOTALL,
         )
         fm = _FOOTNOTE_BLOCK.search(raw)
         if fm:
-            # Confirm the two numbers are consecutive to avoid false positives
             n1, n2 = int(fm.group(1)), int(fm.group(2))
             if abs(n2 - n1) <= 2 and n1 >= 1:
                 raw = raw[:fm.start()]
