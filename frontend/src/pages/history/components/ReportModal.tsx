@@ -12,7 +12,6 @@ interface Props {
 }
 
 export default function ReportModal({ doc, onClose }: Props) {
-  // try without catch in handleDownload blocks React Compiler — opt out.
   "use no memo"
 
   const navigate    = useNavigate()
@@ -27,7 +26,6 @@ export default function ReportModal({ doc, onClose }: Props) {
     try {
       await generatePdfReport(report.report_data, doc.filename)
     } catch {
-      // swallow — download failure is non-critical
     }
     setDownloading(false)
   }

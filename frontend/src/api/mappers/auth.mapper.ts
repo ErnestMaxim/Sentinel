@@ -1,6 +1,3 @@
-// ── Auth mapper ────────────────────────────────────────────────────────────────
-// Converts raw UserResponseDto → AuthUser domain type.
-
 import type { UserResponseDto } from '../dto/auth.dto'
 import type { AuthUser }        from '../../context/AuthContext'
 

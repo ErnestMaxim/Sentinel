@@ -1,6 +1,3 @@
-// ── Documents mapper ───────────────────────────────────────────────────────────
-// Converts raw API DTOs → internal domain types used by the app.
-
 import type {
   DocumentDto,
   ReportDto,

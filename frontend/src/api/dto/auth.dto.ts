@@ -1,9 +1,4 @@
-// ── Auth DTO ───────────────────────────────────────────────────────────────────
-// Raw shapes sent to / received from the auth API endpoints.
-// These mirror the backend Pydantic schemas exactly (snake_case).
-
 // ── Requests ──────────────────────────────────────────────────────────────────
-
 export interface LoginRequestDto {
   email:    string
   password: string
@@ -33,7 +28,6 @@ export interface PatchMeRequestDto {
 }
 
 // ── Responses ─────────────────────────────────────────────────────────────────
-
 export interface TokenResponseDto {
   access_token: string
   token_type:   string

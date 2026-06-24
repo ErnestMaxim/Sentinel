@@ -1,18 +1,14 @@
-// ── index.ts ──────────────────────────────────────────────────────────────────
-// Public entry point. Orchestrates all pages of the PDF report.
-
 import jsPDF from 'jspdf'
 import { C, PH, PW } from './helpers/constants'
 import { fillRect } from './primitives'
 import { renderCover } from './renderCover'
-import { renderDocumentView } from '../report/Renderdocument'
+import { renderDocumentView } from '../report/renderDocument'
 import { renderSource } from './renderSource'
 import type { EngineReport, ReportFilter } from './helpers/types'
 
 export type { EngineMatch, EngineReport, EngineSource, ReportFilter } from './helpers/types'
 
 // ── Safe-data normalisation ───────────────────────────────────────────────────
-
 function safeReport(data: EngineReport): EngineReport {
   return {
     ...data,
@@ -28,7 +24,6 @@ function safeReport(data: EngineReport): EngineReport {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-
 export async function generatePdfReport(
   data:             EngineReport,
   originalFileName: string,
@@ -39,9 +34,6 @@ export async function generatePdfReport(
   const submissionId = `sentinel:${Date.now()}`
   const date         = new Date().toLocaleString('en-GB')
 
-  // Page count estimate:
-  //   1 cover + N source pages + 1+ document-view pages
-  // Document view page count is approximate (1 per 15 chunks is a safe guess).
   const flaggedChunks = new Set(
     report.sources.flatMap(s => s.matches.map(m => m.query_chunk_idx))
   ).size

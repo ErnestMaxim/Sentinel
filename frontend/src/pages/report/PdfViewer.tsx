@@ -64,7 +64,6 @@ const GREEK_MAP: [string, string][] = [
 ]
 
 function normForMatch(s: string): string {
-  // Unicode Greek → ASCII tokens (matches backend normalizer step 2)
   let t = s
   for (const [ch, tok] of GREEK_MAP) t = t.replaceAll(ch, ` ${tok} `)
 

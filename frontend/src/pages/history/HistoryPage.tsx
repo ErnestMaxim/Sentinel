@@ -21,9 +21,7 @@ import styles from './HistoryPage.module.css'
 import { REPORT_STORAGE_KEY, type StoredReport } from '../report/ReportPage'
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
 declare module '@tanstack/react-table' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
     align?: 'left' | 'right' | 'center'
   }
@@ -58,7 +56,6 @@ const colHelper  = createColumnHelper<HistoryDocument>()
 // ── Page component ───────────────────────────────────────────────────────────
 
 export default function HistoryPage() {
-  // useReactTable is flagged as an incompatible library by React Compiler — opt out.
   "use no memo"
 
   const navigate = useNavigate()
@@ -121,8 +118,6 @@ export default function HistoryPage() {
   }
 
   // ── Column definitions ────────────────────────────────────────────────────
-
-  // React Compiler memoizes this automatically — no useMemo needed.
   const columns = [
     colHelper.accessor('filename', {
       id:       'document',

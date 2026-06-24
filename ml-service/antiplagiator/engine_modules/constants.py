@@ -3,7 +3,6 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # arXiv API
 # ---------------------------------------------------------------------------
-
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ARXIV_PDF_URL = "https://export.arxiv.org/pdf/{arxiv_id}.pdf"
 ARXIV_SRC_URL = "https://export.arxiv.org/src/{arxiv_id}"
@@ -16,7 +15,6 @@ ATOM_NS = {
 # ---------------------------------------------------------------------------
 # Model / FAISS defaults
 # ---------------------------------------------------------------------------
-
 DEFAULT_MODEL = "BAAI/bge-base-en-v1.5"
 DEFAULT_NPROBE = 20
 
@@ -24,7 +22,6 @@ DEFAULT_NPROBE = 20
 # Category code <-> name mapping
 # Classifier outputs human-readable names; FAISS index files use arXiv codes.
 # ---------------------------------------------------------------------------
-
 CATEGORY_CODE_TO_NAME: dict[str, str] = {
     "astro-ph":  "Astrophysics",
     "cond-mat":  "Condensed Matter",

@@ -1,20 +1,3 @@
-"""
-evaluate_sentinel.py — Script de evaluare experimentală Sentinel
-================================================================
-Rulare din folderul ml-service/:
-
-    python evaluate_sentinel.py \\
-        --artifacts-dir artifacts/ \\
-        --data-dir antiplagiator/data/processed/ \\
-        --corpus-jsonl antiplagiator/data/processed/chunked_database.jsonl \\
-        --openai-key sk-...
-
-Produce la final tabelele LaTeX gata de inserat în lucrare.
-
-Dependențe suplimentare față de ml-service:
-    pip install openai
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -37,14 +20,14 @@ LOGGER = logging.getLogger("evaluate")
 
 # ── Parametri scenarii ────────────────────────────────────────────────────────
 
-N_SCENARIO1     = 50    # nr. articole pentru copiere directă
-CHUNKS_PER_DOC  = 3     # fragmente extrase per articol
-BASE_TEXT_WORDS = 1000  # cuvinte text neutru
-N_SCENARIO2     = 30    # nr. fragmente pentru parafraze
-N_SCENARIO3     = 20    # nr. articole recente pentru fals-pozitive
+N_SCENARIO1     = 50
+CHUNKS_PER_DOC  = 3
+BASE_TEXT_WORDS = 1000
+N_SCENARIO2     = 30
+N_SCENARIO3     = 20
 
 THRESHOLD_EXACT = 0.85
-THRESHOLD_PARA  = 0.08  # pragul de recuperare în modul parafraze
+THRESHOLD_PARA  = 0.08
 
 SEED = 42
 
@@ -66,7 +49,6 @@ def load_engine(artifacts_dir: Path, data_dir: Path, modal_url: str, modal_secre
     if not engine_py.exists():
         raise FileNotFoundError(f"Nu am găsit engine.py la {engine_py}")
 
-    # Injectează URL-ul Modal și secretul în mediu ÎNAINTE de import
     os.environ["FAISS_REMOTE_URL"] = modal_url
     if modal_secret:
         os.environ["FAISS_API_SECRET"] = modal_secret
@@ -143,7 +125,6 @@ def load_corpus_sample(jsonl_path: Path, n_papers: int, rng: random.Random) -> l
                 }
             papers[aid]["chunks"].append(row.get("text", ""))
 
-    # Filtrează articolele cu cel puțin CHUNKS_PER_DOC fragmente
     eligible = [p for p in papers.values() if len(p["chunks"]) >= CHUNKS_PER_DOC]
     LOGGER.info("%d articole eligibile din corpus.", len(eligible))
 
@@ -194,12 +175,10 @@ def run_scenario1(engine_exact, corpus_papers: list[dict]) -> dict:
     verbatim_total = 0
 
     for i, paper in enumerate(corpus_papers):
-        # Selectează CHUNKS_PER_DOC fragmente din locuri diferite ale articolului
         n = len(paper["chunks"])
         step = max(1, n // CHUNKS_PER_DOC)
         selected_chunks = [paper["chunks"][j * step] for j in range(CHUNKS_PER_DOC)]
 
-        # Construiește documentul: text neutru + fragmente inserate
         base = build_neutral_base(BASE_TEXT_WORDS // (CHUNKS_PER_DOC + 1))
         parts = []
         for chunk in selected_chunks:
@@ -230,7 +209,7 @@ def run_scenario1(engine_exact, corpus_papers: list[dict]) -> dict:
         found_ids = [s.get("arxiv_id", "") for s in sources]
         target_id = paper["arxiv_id"]
 
-        # Verifică dacă sursa corectă e în top-1 sau top-3
+
         in_top1 = len(found_ids) > 0 and found_ids[0] == target_id
         in_top3 = target_id in found_ids[:3]
 
@@ -243,7 +222,6 @@ def run_scenario1(engine_exact, corpus_papers: list[dict]) -> dict:
         scores.append(score)
         durations.append(duration)
 
-        # Numără secvențe verbatim așteptate vs. detectate
         for src in sources:
             if src.get("arxiv_id") == target_id:
                 for match in src.get("matches", []):

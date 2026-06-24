@@ -51,7 +51,7 @@ export default function IconPicker({ icon, initials }: Props) {
           </button>
         </div>
 
-        {/* Hidden file input — triggered by the button below; not directly reachable */}
+        {/* Hidden file input*/}
         <input
           ref={fileRef}
           type="file"

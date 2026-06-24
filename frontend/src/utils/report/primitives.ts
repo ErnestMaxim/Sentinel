@@ -1,5 +1,3 @@
-// ── primitives.ts ─────────────────────────────────────────────────────────────
-
 import jsPDF from 'jspdf'
 import { C, ML, MR, PH, PW, type RGB } from './helpers/constants'
 

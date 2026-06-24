@@ -1,7 +1,6 @@
 import jsPDF from 'jspdf'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
 export interface EngineMatch {
   query_chunk_idx:      number
   query_text:           string
@@ -45,7 +44,6 @@ export interface EngineReport {
 export type ReportFilter = 'all' | 'exact' | 'paraphrase'
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-
 const PW   = 210   // A4 width mm
 const PH   = 297   // A4 height mm
 const ML   = 20    // margin left
@@ -61,8 +59,8 @@ const C = {
   lightGrey:  [220, 220, 225] as [number,number,number],
   bgGrey:     [248, 248, 250] as [number,number,number],
   white:      [255, 255, 255] as [number,number,number],
-  accent:     [30,  30,  30]  as [number,number,number],   // dark text on yellow
-  yellow:     [255, 215,   0] as [number,number,number],   // Sentinel yellow
+  accent:     [30,  30,  30]  as [number,number,number],
+  yellow:     [255, 215,   0] as [number,number,number],
   yellowBg:   [255, 250, 210] as [number,number,number],
   red:        [200,  50,  50] as [number,number,number],
   redBg:      [255, 240, 240] as [number,number,number],
@@ -76,7 +74,6 @@ const C = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
 function scoreColor(pct: number): [number,number,number] {
   if (pct <= 15) return C.green
   if (pct <= 40) return C.orange
@@ -110,7 +107,6 @@ function addPage(doc: jsPDF) {
 }
 
 // ── Header / footer printed on every page ────────────────────────────────────
-
 function pageHeader(doc: jsPDF, docName: string, pageNum: number, totalPages: number) {
   // Top yellow bar
   fillRect(doc, 0, 0, PW, 12, C.yellow)
@@ -144,7 +140,6 @@ function pageFooter(doc: jsPDF, submissionId: string, date: string) {
 }
 
 // ── Page 1: Cover ─────────────────────────────────────────────────────────────
-
 function renderCover(
   doc: jsPDF,
   data: EngineReport,
@@ -322,7 +317,6 @@ function renderCover(
 }
 
 // ── Pages 2+: Per-source detail ───────────────────────────────────────────────
-
 function renderSource(
   doc: jsPDF,
   src: EngineSource,
@@ -502,7 +496,6 @@ function renderSource(
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-
 export async function generatePdfReport(
   data: EngineReport,
   originalFileName: string,

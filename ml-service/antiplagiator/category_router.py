@@ -1,26 +1,4 @@
 from __future__ import annotations
-
-"""
-category_router.py — Sentinel category routing with three enhancements:
-
-  Option 1 — route_per_chunk()
-      Each chunk is classified independently. Returns a dict mapping chunk_idx
-      to the list of candidate categories for that chunk. A math-heavy chunk
-      in a CS paper routes to `math`; a CS-heavy chunk stays in `cs`.
-
-  Option 2 — confidence_aware_threshold()
-      Uses the classifier entropy as a multiplier on the FAISS retrieval threshold.
-      Low-confidence (interdisciplinary) documents get a lower threshold so the
-      engine casts a wider net. High-confidence documents use the full threshold.
-      Formula: effective = max(floor, base - (1 - confidence) * penalty)
-
-  Option 3 — detect_cross_domain()
-      After search, compares the predicted category of the query document against
-      the categories of matched sources. If a significant fraction of matches come
-      from a different field, emits a cross_domain_alert dict with details.
-      This is surfaced in the final report JSON.
-"""
-
 import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING

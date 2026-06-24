@@ -1,5 +1,3 @@
-// ── renderSource.ts ───────────────────────────────────────────────────────────
-
 import jsPDF from 'jspdf'
 import {
   C, CW, FONT_BODY, FONT_TINY, FONT_SMALL, LINE_H,
@@ -11,7 +9,6 @@ import { addPage, currentPage, fillRounded, strokeRounded, wrap } from './primit
 import type { EngineSource, ReportFilter } from './helpers/types'
 
 // ── Source header ─────────────────────────────────────────────────────────────
-
 function drawSourceHeader(doc: jsPDF, src: EngineSource, index: number, y: number): number {
   const isExact = src.has_exact_copies
   const hCol    = isExact ? C.red    : C.purple
@@ -66,8 +63,7 @@ function drawSourceHeader(doc: jsPDF, src: EngineSource, index: number, y: numbe
   return y + H + 6
 }
 
-// ── Match card — side-by-side diff layout ─────────────────────────────────────
-
+// ── Match card ─────────────────────────────────────
 function drawMatchCard(
   doc:       jsPDF,
   m:         { query_text: string; db_text?: string; match_percentage: number; detection?: string; exact_copied_phrases?: string[] }
@@ -88,7 +84,6 @@ function drawMatchCard(
   const phLines = phrases.flatMap(ph => wrap(doc, `"${ph}"`, COL_W - 4))
   const phH     = phLines.length > 0 ? phLines.length * 4.2 + 10 : 0
 
-  // Total card height: header pill + columns + optional phrases
   const CARD_H = 9 + 4 + textH + (phH > 0 ? phH + 3 : 0) + 4
 
   return CARD_H
@@ -212,7 +207,6 @@ function renderMatchCard(
 }
 
 // ── Main source renderer ──────────────────────────────────────────────────────
-
 export function renderSource(
   doc:          jsPDF,
   src:          EngineSource,

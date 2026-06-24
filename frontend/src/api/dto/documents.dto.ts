@@ -1,8 +1,4 @@
-// ── Documents DTO ──────────────────────────────────────────────────────────────
-// Raw shapes received from the documents API (snake_case, mirrors backend schemas).
-
 // ── Engine report (from AI microservice, relayed by backend) ──────────────────
-
 export interface EngineMatchDto {
   query_chunk_idx:      number
   query_text:           string
@@ -31,8 +27,8 @@ export interface EngineReportDto {
   global_plagiarism_score_percent: number
   total_suspicious_sources:        number
   total_reported_sources:          number
-  full_text?:                      string   // normalized text (used for matching)
-  display_text?:                   string   // original extracted text (used for display)
+  full_text?:                      string
+  display_text?:                   string
   document_stats: {
     total_words:           number
     total_chunks_analyzed: number
@@ -46,7 +42,6 @@ export interface EngineReportDto {
 }
 
 // ── Report record (stored in DB, wraps the engine report) ─────────────────────
-
 export interface ReportDto {
   id:                      number
   global_score:            number
@@ -57,7 +52,6 @@ export interface ReportDto {
 }
 
 // ── Document record ───────────────────────────────────────────────────────────
-
 export type DocumentStatusDto = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
 export interface DocumentDto {
@@ -70,8 +64,6 @@ export interface DocumentDto {
 }
 
 // ── Upload request ────────────────────────────────────────────────────────────
-// Sent as multipart/form-data — typed for documentation purposes.
-
 export interface UploadDocumentRequestDto {
   file:    File
   user_id: number

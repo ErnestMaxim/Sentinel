@@ -1,10 +1,3 @@
-/* ══════════════════════════════════════════════════════════════════════════
-   SENTINEL — Homepage  ·  v6  (GSAP edition)
-   Hero entrance, scroll reveals, statement scrub, count-up, photo parallax,
-   and mouse parallax are all driven by GSAP + ScrollTrigger.
-   CSS handles only ambient loops and micro-interactions that don't need JS.
-   ══════════════════════════════════════════════════════════════════════════ */
-
 @property --ba {
   syntax:        '<angle>';
   initial-value: 0deg;
@@ -127,9 +120,7 @@
   padding: 0 40px; max-width: 840px; width: 100%;
   margin-bottom: 60px;
 }
-/* heroLogo, heroLine1, heroAccent, heroSub, heroCta, heroScrollHint
-   entrance animations are driven by GSAP in HomePage.tsx (hero timeline).
-   Only the persistent visual styles remain here. */
+
 .heroLogo {
   width: clamp(56px, 5.5vw, 84px); height: auto; margin-bottom: 18px;
   filter: drop-shadow(0 0 52px rgba(255,220,0,0.24));
@@ -396,7 +387,6 @@
 .meshViz { position: relative; width: 100%; max-width: 500px; cursor: crosshair; transition: filter 600ms; }
 .meshVizActive { filter: drop-shadow(0 0 40px rgba(255,220,0,0.13)); }
 .meshSvg { width: 100%; height: auto; display: block; overflow: visible; }
-/* Individual vertex pulse — CSS handles idle life, GSAP handles group movement */
 .meshNode {
   animation: meshNodePulse 3s ease-in-out infinite alternate;
   animation-delay: var(--nd, 0s);
@@ -439,7 +429,6 @@
 
 /* ── Chunk viz ───────────────────────────────────────────────────────────── */
 .chunkViz { width: 100%; max-width: 430px; display: flex; flex-direction: column; gap: 10px; position: relative; cursor: pointer; }
-/* chunkWindow removed — active state handled by accent bar on the item */
 .chunkItem {
   animation: chunkIn 0.65s var(--ease) both;
   animation-delay: calc(var(--ci, 0) * 100ms);
@@ -551,16 +540,6 @@
 .ctaButtons { display:flex; flex-direction:column; align-items:center; gap:16px; }
 .ctaTrust { display: flex; align-items: center; gap: 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(245,245,247,0.22); }
 .ctaTrustDot { width: 3px; height: 3px; border-radius: 50%; background: rgba(255,220,0,0.30); flex-shrink: 0; }
-
-/* ══════════════════════════════════════════════════════════════════════════
-   SCROLL-DRIVEN ANIMATIONS
-   Handled by GSAP ScrollTrigger.batch() in HomePage.tsx.
-   data-reveal="up|left|right|scale|dim" on elements,
-   data-parallax="photo" on the student photo.
-   The @supports animation-timeline block has been removed — GSAP provides
-   cross-browser parity (Safari, Firefox) with more control and stagger support.
-   ══════════════════════════════════════════════════════════════════════════ */
-
 /* ══════════════════════════════════════════════════════════════════════════
    RESPONSIVE
    ══════════════════════════════════════════════════════════════════════════ */

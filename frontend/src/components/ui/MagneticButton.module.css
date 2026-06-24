@@ -1,6 +1,4 @@
 .magnetic {
-  /* Inherit all visual styles from the parent className — this wrapper adds no
-     extra box model. Only the cursor tracking is layered on top. */
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -12,8 +10,6 @@
   align-items: center;
   justify-content: center;
   gap: inherit;
-  /* Pointer events live on the button, not the inner span */
   pointer-events: none;
-  /* Will-change tells the compositor to promote this layer early */
   will-change: transform;
 }

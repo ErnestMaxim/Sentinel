@@ -1,23 +1,3 @@
-"""
-Sentinel Anti-Plagiarism — Modal.com AI Microservice
-=====================================================
-Tested with modal==1.4.3
-
-Deploy:
-    modal deploy app.py
-
-Download index first (run once):
-    modal run app.py::download_index
-
-Download category indexes (run once after building them):
-    modal run app.py::download_category_indexes
-
-Test:
-    modal run app.py::test_search
-
-Modal Secret (create once):
-    modal secret create sentinel-secrets HF_TOKEN=hf_... API_SECRET=some_random_string
-"""
 
 from __future__ import annotations
 
@@ -55,7 +35,7 @@ HF_TEXTS_FILENAME = "faiss_texts.pkl"
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
-        "numpy<2",                       # faiss-cpu 1.8.0 requires NumPy 1.x
+        "numpy<2",
         "faiss-cpu==1.8.0",
         "sentence-transformers==3.0.1",
         "huggingface_hub",
@@ -115,7 +95,7 @@ def download_index():
     image=image,
     volumes={VOLUME_MOUNT: volume},
     memory=8192,
-    timeout=7200,   # category indexes are ~45 GB total — give it 2h
+    timeout=7200,
     secrets=[modal.Secret.from_name("faiss-secret")],
 )
 def download_category_indexes():
@@ -173,7 +153,7 @@ def download_category_indexes():
 @app.cls(
     image=image,
     volumes={VOLUME_MOUNT: volume},
-    memory=65536,           # 64 GB RAM
+    memory=65536,
     cpu=4,
     timeout=300,
     scaledown_window=300,
@@ -229,7 +209,7 @@ class FaissSearchService:
                 # Key is the category code e.g. "cs", "math", "astro_ph"
                 key = bin_file.stem[len("faiss_"):]   # strip "faiss_" prefix
                 
-                # FIX: Added faiss.IO_FLAG_MMAP to safely map the category indexes
+                # Added faiss.IO_FLAG_MMAP to safely map the category indexes
                 idx = faiss.read_index(str(bin_file), faiss.IO_FLAG_MMAP)
                 idx.nprobe = self.index.nprobe
 
@@ -300,7 +280,7 @@ class FaissSearchService:
                 db_text = (
                     texts[db_idx]
                     if texts and db_idx < len(texts)
-                    else meta.get("text", "")   # per-cat metadata has text embedded
+                    else meta.get("text", "")
                 )
                 chunk_hits.append({
                     "db_idx":       db_idx,
@@ -390,7 +370,6 @@ class FaissSearchService:
             return {"error": "No chunks provided", "results": []}
 
         # ── Resolve category index ────────────────────────────────────────
-        # Try exact key, then with hyphens converted to underscores
         safe = category.replace("-", "_").replace(".", "_")
         idx  = self.cat_indexes.get(category) or self.cat_indexes.get(safe)
         meta = self.cat_metadata.get(category) or self.cat_metadata.get(safe)
@@ -411,7 +390,7 @@ class FaissSearchService:
             used_category = "global_fallback"
         else:
             results = self._hits_from_search(
-                vectors, idx, meta, [],   # texts embedded in per-cat metadata
+                vectors, idx, meta, [],
                 top_k, threshold, self_arxiv_id,
             )
             used_category = category

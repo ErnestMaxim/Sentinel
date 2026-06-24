@@ -23,7 +23,7 @@ body,
 body {
   min-width: 320px;
   color: #f4f7ff;
-  background: #08090e; /* dark fallback — prevents flash on page load */
+  background: #08090e;
   overflow-x: hidden;
 }
 

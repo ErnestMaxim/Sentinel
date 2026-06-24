@@ -5,7 +5,6 @@ import re
 # ---------------------------------------------------------------------------
 # Greek letter tables
 # ---------------------------------------------------------------------------
-
 GREEK_TO_TOKEN: dict[str, str] = {
     "alpha":   "ALPHA",   "beta":    "BETA",    "gamma":   "GAMMA",
     "delta":   "DELTA",   "epsilon": "EPSILON", "zeta":    "ZETA",
@@ -41,7 +40,6 @@ UNICODE_GREEK: dict[str, str] = {
 # PyMuPDF outputs these unicode symbols instead of LaTeX commands.
 # Mapped to the same tokens as the LaTeX path so query and dataset
 # embeddings stay aligned.
-# Must stay identical to UNICODE_MATH_OPS in pipelines/02_chunker.py
 # ---------------------------------------------------------------------------
 
 UNICODE_MATH_OPS: dict[str, str] = {
@@ -120,7 +118,6 @@ SUBSCRIPT_DIGITS: dict[str, str] = {
 # ---------------------------------------------------------------------------
 # Main normalisation function
 # ---------------------------------------------------------------------------
-
 def normalize_text_for_fingerprint(text: str) -> str:
     """
     Normalise academic text for fingerprinting / similarity comparison.

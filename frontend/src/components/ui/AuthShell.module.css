@@ -61,7 +61,7 @@
   width: fit-content;
 }
 
-/* The sliding indicator — translates via CSS, never jumps */
+/* The sliding indicator */
 .modePill {
   position: absolute;
   top: 4px;

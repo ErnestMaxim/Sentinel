@@ -1,7 +1,3 @@
-// ── Auth API ───────────────────────────────────────────────────────────────────
-// All network calls for authentication flows.
-// Accepts domain-level inputs, speaks DTOs to the server, returns domain types.
-
 import type {
   LoginRequestDto,
   RegisterRequestDto,
@@ -12,10 +8,9 @@ import type {
   PatchMeRequestDto,
 } from './dto/auth.dto'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+const API = import.meta.env.VITE_API_URL
 
 // ── Internal fetch helper ─────────────────────────────────────────────────────
-
 async function post<TResponse>(path: string, body: unknown): Promise<TResponse> {
   const res  = await fetch(`${API}${path}`, {
     method:  'POST',
@@ -51,7 +46,6 @@ async function get<TResponse>(path: string, token: string | null): Promise<TResp
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
-
 /** Returns the raw JWT access token string. Caller stores it. */
 export async function login(email: string, password: string): Promise<string> {
   const dto: LoginRequestDto = { email: email.trim().toLowerCase(), password }

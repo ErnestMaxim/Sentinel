@@ -9,17 +9,12 @@ gsap.registerPlugin(ScrollTrigger)
 /**
  * Animated score ring — the arc draws in from 0 with a custom GSAP ease,
  * and the percentage counter counts up in sync.
- *
- * Replaces the CSS `transition: stroke-dasharray 1s ease` approach:
- * - GSAP's power4.out gives a more satisfying deceleration curve
- * - The number counter is driven by the same proxy object (stays in sync)
- * - ScrollTrigger fires the animation when the ring enters the viewport
  */
 export default function ScoreRing({ pct }: { pct: number }) {
   const r        = 52
   const circ     = 2 * Math.PI * r
   const safePct  = isNaN(pct) || pct == null ? 0 : pct
-  const orig     = 100 - safePct          // "original" percentage
+  const orig     = 100 - safePct
   const finalDash = (orig / 100) * circ
   const col      = orig >= 75 ? '#16a34a' : orig >= 50 ? '#d97706' : '#dc2626'
 
@@ -63,7 +58,7 @@ export default function ScoreRing({ pct }: { pct: number }) {
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={`0 ${circ}`}
-          strokeDashoffset={circ / 4}   /* start at 12-o'clock */
+          strokeDashoffset={circ / 4}
         />
       </svg>
       <div className={styles.ringCenter}>

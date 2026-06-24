@@ -1,9 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   Analyzer — clean, structural, no decorative noise
-   ═══════════════════════════════════════════════════════════════════════════ */
-
 /* ── Shell ──────────────────────────────────────────────────────────────── */
-
 .page {
   display: flex;
   min-height: 100vh;
@@ -27,7 +22,6 @@
 /* ══════════════════════════════════════════════════════════════════════════
    UPLOAD VIEW
    ══════════════════════════════════════════════════════════════════════════ */
-
 .uploadWrap {
   width: 100%;
   max-width: 520px;
@@ -427,7 +421,6 @@
   z-index: 1;
 }
 
-/* Step label animates in on each step change (key= triggers remount) */
 .pipeStatusLabel {
   font-size: 22px;
   font-weight: 700;
@@ -450,7 +443,6 @@
 }
 
 /* ── Progress segments ── */
-
 .pipeSteps {
   display: flex;
   gap: 4px;

@@ -1,9 +1,3 @@
-// ── renderDocument.ts ─────────────────────────────────────────────────────────
-// Renders the "Document View" pages.
-// Full text flows as continuous paragraphs. Flagged spans get an inline
-// highlight — a colored rectangle drawn behind each word in the flagged range,
-// like a highlighter pen. No boxes, no cards.
-
 import jsPDF from 'jspdf'
 import {
   C, CW, FONT_BODY, FONT_TINY, FONT_SMALL, FONT_HEAD,
@@ -16,14 +10,13 @@ import type { EngineReport, ReportFilter } from './helpers/types'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Span {
-  start:     number   // char offset in full_text
+  start:     number
   end:       number
   sourceIdx: number
   isExact:   boolean
 }
 
 // ── Build flagged spans from matches ──────────────────────────────────────────
-
 function buildSpans(data: EngineReport, filter: ReportFilter): Span[] {
   const spans: Span[] = []
 
@@ -69,13 +62,11 @@ function spanAt(charPos: number, spans: Span[]): number {
 }
 
 // ── Highlight colors ──────────────────────────────────────────────────────────
-
 function highlightBg(span: Span) {
   return span.isExact ? C.redBg : C.purpleBg
 }
 
 // ── Legend ────────────────────────────────────────────────────────────────────
-
 function renderLegend(doc: jsPDF, data: EngineReport, y: number): number {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(FONT_TINY)
@@ -117,7 +108,6 @@ function renderLegend(doc: jsPDF, data: EngineReport, y: number): number {
 }
 
 // ── Main renderer ─────────────────────────────────────────────────────────────
-
 export function renderDocumentView(
   doc:          jsPDF,
   data:         EngineReport,
@@ -162,11 +152,6 @@ export function renderDocumentView(
   y += 8
 
   // ── Flowing text with inline highlights ──────────────────────────────────
-
-  // We split the full text into words, track char position of each word,
-  // then lay them out line by line. Before rendering each word we check
-  // if it falls inside a flagged span and draw a highlight rect behind it.
-
   const FONT_SIZE   = FONT_BODY
   const SPACE_W     = 1.8    // approximate space width in mm at FONT_BODY
   const LINE_HEIGHT = LINE_H + 1.5
@@ -183,7 +168,6 @@ export function renderDocumentView(
     words.push({ word: match[0], start: match.index, end: match.index + match[0].length })
   }
 
-  // Layout: greedily pack words into lines up to CW
   interface LayoutLine {
     words: Array<{ word: string; start: number; end: number; x: number; w: number }>
   }
@@ -219,7 +203,6 @@ export function renderDocumentView(
       y = MT + 6
     }
 
-    // Render each word in the line
     for (const wd of line.words) {
       const si = spanAt(wd.start, spans)
 
@@ -227,7 +210,6 @@ export function renderDocumentView(
         const span = spans[si]
         const bg   = highlightBg(span)
 
-        // Highlight rect behind this word — slightly taller than text
         doc.setFillColor(...bg)
         doc.rect(wd.x - 0.3, y - LINE_HEIGHT + 1.5, wd.w + 0.6, HIGHLIGHT_H, 'F')
       }

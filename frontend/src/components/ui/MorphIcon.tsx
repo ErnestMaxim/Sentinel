@@ -19,9 +19,6 @@ interface Props {
  *   analyzing → spinning arc (no CSS @keyframes)
  *   done      → checkmark drawn in via stroke-dashoffset
  *   error     → X with horizontal shake
- *
- * Every state change kills prior tweens and re-enters cleanly.
- * Zero CSS animations — GSAP owns everything.
  */
 export default function MorphIcon({ phase, size = 48, className }: Props) {
   const svgRef    = useRef<SVGSVGElement>(null)
@@ -68,9 +65,6 @@ export default function MorphIcon({ phase, size = 48, className }: Props) {
       /* ── Analyzing: spinning arc ───────────────────────────────────────── */
       case 'analyzing':
         // '50% 50%' → GSAP resolves to the element's bounding-box centre,
-        // which is the circle's cx/cy regardless of SVG scale or render size.
-        // '24px 24px' would be relative to the element's local box corner,
-        // placing the pivot off-centre and causing the arc to fly out of view.
         gsap.set(spin, { autoAlpha: 1, transformOrigin: '50% 50%' })
         gsap.to(spin, {
           rotation: 360,

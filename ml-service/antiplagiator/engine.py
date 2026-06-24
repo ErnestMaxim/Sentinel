@@ -44,27 +44,14 @@ from engine_modules.utils import build_session, resolve_device
 
 LOGGER = logging.getLogger("plagiarism_engine")
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 MAX_WORDS                        = 50_000
 ROUTING_SAMPLE_SIZE              = 8
 HIGH_CONFIDENCE_THRESHOLD        = 0.90
 MIN_EXACT_PHRASE_CHARS           = 50
 PARAPHRASE_RETRIEVAL_THRESHOLD   = 0.78
-# Cross-encoder logit threshold for paraphrase detection.
-# 0.0 (old value) accepted any positive logit — thematically-related academic
-# papers in the same field routinely score 1-3 even with no actual copying.
-# 3.5 corresponds to ~97% sigmoid confidence and rejects "topically similar"
-# matches while still catching genuine paraphrases (which typically score 5+).
 PARAPHRASE_CROSS_SCORE_THRESHOLD = 3.5
 DEFAULT_RERANKER_MODEL           = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-
-# ---------------------------------------------------------------------------
-# Data types
-# ---------------------------------------------------------------------------
 
 def _severity(similarity: float) -> str:
     if similarity >= 0.95:
@@ -111,24 +98,17 @@ class SourceResult:
     arxiv_id:       str
     title:          str
     matches:        list[ChunkMatch] = field(default_factory=list)
-    top_category:   str = ""   # populated during search for Option 3
-    # Independent per-source flagged word-slot positions.
-    # Each source tracks its own coverage set without being deducted
-    # by positions already claimed by another source.  This eliminates
-    # the processing-order bias of the old "winner takes all" approach:
-    # every source that genuinely matched a chunk now reflects that in
-    # its score_contribution_percent regardless of which source was
-    # processed first for that chunk position.
+    top_category:   str = ""
+    # Each source tracks its own coverage set without being deducted by positions
+    # already claimed by another source, eliminating processing-order bias.
     _own_positions: set = field(default_factory=set, repr=False)
 
     @property
     def flagged_word_count(self) -> int:
-        """Number of unique word-slot positions flagged for this source."""
         return len(self._own_positions)
 
     @property
     def has_exact_copies(self) -> bool:
-        """True only when at least one match is near-verbatim (severity == 'identical', i.e. ≥ 0.95)."""
         return any(m.severity == "identical" for m in self.matches)
 
     @property
@@ -169,10 +149,6 @@ class RoutingDecision:
             "strategy":   self.strategy,
         }
 
-
-# ---------------------------------------------------------------------------
-# Engine
-# ---------------------------------------------------------------------------
 
 class AntiplagiarismEngine:
 
@@ -217,10 +193,6 @@ class AntiplagiarismEngine:
         except Exception as exc:
             self.init_error = str(exc)
             LOGGER.error("Engine failed to initialise: %s", exc)
-
-    # ------------------------------------------------------------------
-    # Initialisation helpers
-    # ------------------------------------------------------------------
 
     def _setup_modules(self, model_name: str, device: str) -> None:
         self._session   = build_session()
@@ -267,13 +239,8 @@ class AntiplagiarismEngine:
             return
         clf_path = artifacts_dir / artifact_name
         if clf_path.exists():
-            # Register PyTorch MLP classes on __main__ BEFORE joblib.load().
-            # The .pkl was saved from a Colab notebook where these classes lived
-            # in __main__; without this, pickle raises "Can't get attribute
-            # 'SentinelMLPWrapper' on <module '__main__' ...>".
             from antiplagiator.engine_modules.classifier import register_classifier_classes
             register_classifier_classes()
-
             artifact = joblib.load(clf_path)
             self.clf = artifact["classifier"]
             LOGGER.info("Classifier loaded — %d classes", len(artifact["labels"]))
@@ -297,10 +264,6 @@ class AntiplagiarismEngine:
                 "paraphrase_mode will have no effect."
             )
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def analyze_document(
         self,
         file_path: Path,
@@ -315,7 +278,6 @@ class AntiplagiarismEngine:
         active_paraphrase = paraphrase_mode and self._reranker is not None
         timings: dict[str, float] = {}
 
-        # ── 1. Extraction ──────────────────────────────────────────────
         t0 = time.monotonic()
         chunks, full_text, display_text = self._extractor.read_and_chunk(
             file_path, arxiv_id=arxiv_id
@@ -335,15 +297,12 @@ class AntiplagiarismEngine:
         total_words = sum(len(c.split()) for c in chunks)
         timings["extraction_s"] = round(time.monotonic() - t0, 3)
 
-        # ── 2. Encoding ────────────────────────────────────────────────
         t1            = time.monotonic()
         query_vectors = self._encode_batch(chunks)
         timings["encoding_s"] = round(time.monotonic() - t1, 3)
 
-        # ── 3. Option 2 — Confidence-aware threshold ───────────────────
-        # Adjusts retrieval threshold based on how focused the document is.
-        # Interdisciplinary papers get a slightly lower threshold so the
-        # engine casts a wider net and doesn't miss cross-domain matches.
+        # Option 2 — Confidence-aware threshold: interdisciplinary documents get
+        # a slightly lower threshold so the engine casts a wider net.
         if self.use_category_routing and self.clf is not None and not active_paraphrase:
             effective_threshold, avg_conf = confidence_aware_threshold(
                 self.clf,
@@ -361,13 +320,10 @@ class AntiplagiarismEngine:
             )
             avg_conf = 0.0
 
-        # ── 4. Document-level routing (kept for metadata + fallback) ───
         routing = self._decide_routing(query_vectors)
 
-        # ── 5. Option 1 — Per-chunk routing ────────────────────────────
-        # Each chunk gets its own category classification so a math-heavy
-        # chunk in a CS paper routes to `math` rather than being forced
-        # into `cs`. Falls back to global search for low-confidence chunks.
+        # Option 1 — Per-chunk routing: each chunk gets its own category so a
+        # math-heavy chunk in a CS paper routes to `math` rather than `cs`.
         is_remote = hasattr(self.index, "search_category")
         can_do_per_chunk = (
             self.use_category_routing
@@ -389,10 +345,8 @@ class AntiplagiarismEngine:
                 len(chunks),
             )
         else:
-            # Fall back to document-level categories for all chunks
             chunk_routes = {i: routing.categories for i in range(len(chunks))}
 
-        # ── 6. Search ──────────────────────────────────────────────────
         t2 = time.monotonic()
         sources, flagged_chunk_map, counted_word_positions = self._run_search(
             chunks, query_vectors,
@@ -406,28 +360,18 @@ class AntiplagiarismEngine:
         )
         timings["search_s"] = round(time.monotonic() - t2, 3)
 
-        # ── 7. Ranking and scoring ─────────────────────────────────────
         t3 = time.monotonic()
         ranked_sources = self._rank_and_trim_sources(sources)
 
-        flagged_words = len(counted_word_positions)
-        # word_coverage is the correct global plagiarism score:
-        # fraction of all analysed word-slots that were flagged across
-        # ALL sources combined (deduplicated union).
-        # The old formula used max(single_source.flagged_word_count) which
-        # would under-report when multiple sources each cover different
-        # portions of the document.
-        word_coverage = flagged_words / total_words if total_words > 0 else 0.0
-        # Actual document word count (denominator for human-readable stats).
+        flagged_words         = len(counted_word_positions)
+        word_coverage         = flagged_words / total_words if total_words > 0 else 0.0
         actual_document_words = len(full_text.split()) if full_text else 0
 
         timings["ranking_s"] = round(time.monotonic() - t3, 3)
         timings["total_s"]   = round(sum(timings.values()), 3)
 
-        # ── 8. Option 3 — Cross-domain alert ───────────────────────────
-        # Detects when a document borrows heavily from a different academic
-        # field than its own predicted category — a signal for cross-domain
-        # idea borrowing or insufficient citation.
+        # Option 3 — Cross-domain alert: flags when a significant fraction of
+        # matches come from a different field than the query document.
         cross_domain_alert: dict[str, Any] = {"detected": False}
         if self.use_category_routing and self.clf is not None and ranked_sources:
             sources_for_alert = [
@@ -452,7 +396,6 @@ class AntiplagiarismEngine:
                     alert["foreign_match_ratio"] * 100,
                 )
 
-        # ── 9. Result ──────────────────────────────────────────────────
         return {
             "file_name":                       file_path.name,
             "global_plagiarism_score_percent": round(word_coverage * 100, 2),
@@ -481,10 +424,6 @@ class AntiplagiarismEngine:
             },
         }
 
-    # ------------------------------------------------------------------
-    # Encoding
-    # ------------------------------------------------------------------
-
     def _encode_batch(self, texts: list[str]) -> np.ndarray:
         return self._model.encode(
             texts,
@@ -493,10 +432,6 @@ class AntiplagiarismEngine:
             batch_size=64,
             show_progress_bar=False,
         ).astype("float32")
-
-    # ------------------------------------------------------------------
-    # Document-level routing (kept for metadata / fallback)
-    # ------------------------------------------------------------------
 
     def _decide_routing(self, query_vectors: np.ndarray) -> RoutingDecision:
         if not self.use_category_routing or self.clf is None:
@@ -551,10 +486,6 @@ class AntiplagiarismEngine:
             confidence=avg_confidence, strategy=strategy,
         )
 
-    # ------------------------------------------------------------------
-    # Search orchestration
-    # ------------------------------------------------------------------
-
     def _prebatch_remote_category_searches(
         self,
         chunks: list[str],
@@ -562,15 +493,11 @@ class AntiplagiarismEngine:
         top_k: int,
     ) -> dict[tuple[int, str], tuple[list[float], list[dict]]]:
         """
-        Pre-batch all remote per-category Modal searches.
+        Group all chunks by assigned category and fire one parallel request per
+        category, reducing Modal calls from O(N_chunks × N_categories) to
+        O(N_categories).
 
-        Instead of N_chunks × N_categories sequential single-chunk HTTP calls,
-        this groups all chunks by their assigned category and fires one parallel
-        request per category, reducing Modal calls from O(N_chunks) to O(N_categories).
-
-        Returns
-        -------
-        dict mapping (chunk_idx, category_safe) -> (scores, metas)
+        Returns dict mapping (chunk_idx, category_safe) -> (scores, metas).
         """
         cat_to_chunks: dict[str, list[tuple[int, str]]] = defaultdict(list)
         for chunk_idx, chunk_text in enumerate(chunks):
@@ -648,14 +575,9 @@ class AntiplagiarismEngine:
         chunk_word_counts = [len(c.split()) for c in chunks]
         is_remote         = hasattr(self.index, "search_category")
 
-        # For global search via Remote, set all texts at once up front
         if not is_remote and hasattr(self.index, "set_query_texts"):
             self.index.set_query_texts(chunks)
 
-        # Pre-batch all remote per-category searches — one parallel HTTP call
-        # per category instead of N_chunks sequential single-chunk calls.
-        # This handles Modal cold starts: a cold quant_ph container no longer
-        # blocks the entire analysis or times out after 120s of sequential waits.
         remote_cat_cache: dict[tuple[int, str], tuple[list[float], list[dict]]] = {}
         if is_remote and self.use_per_category_indexes:
             remote_cat_cache = self._prebatch_remote_category_searches(
@@ -667,7 +589,6 @@ class AntiplagiarismEngine:
             chunk_vec   = query_vectors[chunk_idx:chunk_idx + 1]
             categories  = chunk_routes.get(chunk_idx)
 
-            # Determine search strategy for this individual chunk
             use_per_cat_remote = (
                 is_remote
                 and categories is not None
@@ -681,7 +602,6 @@ class AntiplagiarismEngine:
             )
 
             if use_per_cat_remote:
-                # Option 1 — remote per-category (results already fetched in parallel above)
                 for cat in categories:
                     code   = CATEGORY_NAME_TO_CODE.get(cat, cat)
                     safe   = code.replace("-", "_").replace(".", "_")
@@ -698,7 +618,6 @@ class AntiplagiarismEngine:
                             flagged_chunk_map[chunk_idx] = flagged_info
 
             elif use_per_cat_local:
-                # Option 1 — local per-category FAISS sub-index
                 score_rows, meta_rows = self._search_per_category_parallel(
                     chunk_vec, top_k, categories,
                 )
@@ -715,9 +634,7 @@ class AntiplagiarismEngine:
                     flagged_chunk_map[chunk_idx] = flagged_info
 
             else:
-                # Global search for this chunk
                 if is_remote:
-                    # Remote: set texts for this single chunk
                     self.index.set_query_texts([chunk_text])
 
                 similarities, db_indices = self._search_global(
@@ -736,7 +653,6 @@ class AntiplagiarismEngine:
 
             word_offset += chunk_words
 
-        # Enrich top_category on each SourceResult for Option 3
         for src in sources.values():
             if not src.top_category and src.matches:
                 for meta in self.metadata:
@@ -745,10 +661,6 @@ class AntiplagiarismEngine:
                         break
 
         return sources, flagged_chunk_map, counted_word_positions
-
-    # ------------------------------------------------------------------
-    # Hit processing
-    # ------------------------------------------------------------------
 
     def _process_per_category_hits(
         self,
@@ -838,10 +750,6 @@ class AntiplagiarismEngine:
             word_offset, chunk_words, sources, counted_positions,
         )
 
-    # ------------------------------------------------------------------
-    # Hit processing strategies (your originals — unchanged)
-    # ------------------------------------------------------------------
-
     def _apply_flag_threshold(
         self,
         chunk_idx: int,
@@ -855,27 +763,18 @@ class AntiplagiarismEngine:
     ) -> dict | None:
         best_similarity  = 0.0
         best_match_info: dict | None = None
-        # All distinct sources that passed both threshold and overlap guard
-        # for this chunk — each will be credited independently.
         matching_source_ids: list[str] = []
 
         for similarity, meta, db_text in candidates:
             if similarity < flag_threshold:
                 continue
 
-            # Guard against formula-structural false positives.
-            # Two unrelated math-heavy papers in the same arXiv category can
-            # score above threshold because they share normalised formula tokens
-            # (SUM, PARTIAL, subscript patterns, Greek letters) without sharing
-            # any actual content.  Require at least _MIN_CONTENT_WORD_OVERLAP
-            # non-formula content words in common before flagging.
-            #
-            # BYPASS for very high similarity (≥ 0.90): at that level the chunks
-            # are almost certainly from the same paper — even if the text was
-            # re-extracted through a different pipeline (e.g. PyMuPDF vs marker-pdf)
-            # which can alter formula rendering and reduce shared content words.
-            # Formula-structural false positives between *different* papers never
-            # reach ≥ 0.90 cosine similarity on the all-mpnet-base-v2 model.
+            # Guard against formula-structural false positives: two unrelated
+            # math-heavy papers can score above threshold by sharing normalised
+            # formula tokens (SUM, PARTIAL, Greek letters) without sharing content.
+            # Bypass for similarity >= 0.90 — at that level false positives between
+            # different papers don't occur; the bypass prevents real plagiarism from
+            # being filtered when re-extraction alters formula rendering.
             if similarity < 0.90:
                 overlap = _content_word_overlap(chunk_text, db_text)
                 if overlap < _MIN_CONTENT_WORD_OVERLAP:
@@ -899,12 +798,10 @@ class AntiplagiarismEngine:
                     top_category=meta.get("top_category", ""),
                 ),
             )
-            # Keep top_category if not already set
             if not source.top_category:
                 source.top_category = meta.get("top_category", "")
             source.matches.append(match)
 
-            # Collect for independent word attribution
             if arxiv_id not in matching_source_ids:
                 matching_source_ids.append(arxiv_id)
 
@@ -1005,32 +902,22 @@ class AntiplagiarismEngine:
         sources: dict[str, SourceResult],
     ) -> None:
         """
-        Update word-slot coverage for the global dedup set and for every
-        source that matched this chunk.
+        Update word-slot coverage for the global dedup set and for every source
+        that matched this chunk.
 
-        The global ``counted_positions`` set is used exclusively to compute
-        the overall plagiarism score (union of all flagged positions).
+        ``counted_positions`` is the union of all flagged positions and is used
+        exclusively to compute the overall plagiarism score.
 
-        Each source in ``matching_source_ids`` also gets its own independent
-        position update via ``SourceResult._own_positions``.  Using per-source
-        sets instead of a shared running counter removes the processing-order
-        bias: previously the first-matched source claimed 100% of new positions
-        while later sources that matched the same chunk got 0 credit.  Now
-        every source that genuinely matched a chunk reflects that in its
-        ``score_contribution_percent``.
+        Each source in ``matching_source_ids`` gets its own independent position
+        set so that processing order doesn't determine which source receives credit
+        for a shared chunk — previously the first-matched source claimed all new
+        positions while later sources got zero.
         """
         chunk_positions = set(range(word_offset, word_offset + chunk_words))
-        # Global dedup — used for the overall plagiarism score only.
         counted_positions.update(chunk_positions)
-        # Per-source independent tracking — no cross-source deduplication.
         for src_id in matching_source_ids:
             if src_id in sources:
-                src = sources[src_id]
-                src._own_positions.update(chunk_positions)
-
-    # ------------------------------------------------------------------
-    # FAISS search strategies (your originals — unchanged)
-    # ------------------------------------------------------------------
+                sources[src_id]._own_positions.update(chunk_positions)
 
     def _search_global(
         self,
@@ -1102,10 +989,6 @@ class AntiplagiarismEngine:
 
         return all_scores, all_metas
 
-    # ------------------------------------------------------------------
-    # Match building (your original — unchanged)
-    # ------------------------------------------------------------------
-
     def _build_match(
         self,
         chunk_idx: int,
@@ -1149,10 +1032,6 @@ class AntiplagiarismEngine:
         lookup_key = (str(meta.get("arxiv_id", "")), int(meta.get("chunk_id", -1)))
         return self._text_lookup.get(lookup_key, "Text not available.")
 
-    # ------------------------------------------------------------------
-    # Source ranking (your original — unchanged)
-    # ------------------------------------------------------------------
-
     def _rank_and_trim_sources(
         self, sources: dict[str, SourceResult]
     ) -> list[SourceResult]:
@@ -1175,27 +1054,20 @@ class AntiplagiarismEngine:
 
 
 # ---------------------------------------------------------------------------
-# Module-level helpers (your originals — unchanged)
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
 # Formula-structural false-positive guard
-# ---------------------------------------------------------------------------
 #
 # After normalisation, two unrelated math-heavy papers (e.g. in quant_ph) can
-# look similar to the embedding model because they share structural tokens like
-# SUM, PARTIAL, FRAC(a,b), _(j), ^(2) — none of which carry semantic meaning
-# on their own.  We require at least _MIN_CONTENT_WORD_OVERLAP non-formula
-# content words (length >= 5) in common before flagging a hit.
-#
-# Real plagiarism shares specific domain vocabulary: "stabilizer", "syndrome",
-# "hamiltonian", "codeword", "eigenstate", etc.  Structural false positives
-# share only formula tokens and single-letter variable names.
+# look similar because they share structural tokens like SUM, PARTIAL, _(j), ^(2).
+# We require at least _MIN_CONTENT_WORD_OVERLAP non-formula content words in
+# common. Real plagiarism shares domain vocabulary ("stabilizer", "syndrome",
+# "codeword"); structural false positives share only formula tokens and
+# single-letter variable names.
+# ---------------------------------------------------------------------------
+
 _MIN_CONTENT_WORD_OVERLAP = 2
 
-# Tokens added by the normaliser that indicate formula *structure*, not meaning.
-# Greek letters are included because every quant_ph paper uses alpha/beta/gamma
-# — they provide no discriminative power between papers in the same category.
+# Greek letters included: every quant_ph paper uses alpha/beta/gamma — they
+# provide no discriminative power between papers in the same category.
 _FORMULA_STRUCTURE_TOKENS: frozenset[str] = frozenset({
     "sum", "int", "prod", "lim", "sup", "inf",
     "exp", "log", "ln", "sin", "cos", "tan",
@@ -1205,7 +1077,6 @@ _FORMULA_STRUCTURE_TOKENS: frozenset[str] = frozenset({
     "implies", "iff", "tensor", "oplus", "dagger", "ddagger",
     "forall", "exists", "subset", "supset", "intersect", "union",
     "in", "notin", "not",
-    # Greek tokens (ubiquitous in math-heavy papers — not discriminative)
     "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta",
     "theta", "iota", "kappa", "lambda", "mu", "nu", "xi", "pi",
     "rho", "sigma", "tau", "upsilon", "phi", "chi", "psi", "omega",
@@ -1216,24 +1087,17 @@ def _content_word_overlap(text1: str, text2: str, min_len: int = 5) -> int:
     """
     Count shared content words (length >= min_len) that are not formula
     structure tokens or pure numeric tokens.
-
-    Used as a false-positive guard: two formula-heavy chunks from different
-    papers share 0–1 such words; genuinely plagiarised chunks share specific
-    domain vocabulary and return >= _MIN_CONTENT_WORD_OVERLAP.
     """
     def _extract(text: str) -> set[str]:
         words: set[str] = set()
         for raw in text.lower().split():
-            # Strip trailing punctuation for matching
             w = raw.strip(".,;:!?()[]{}\"'")
             if len(w) < min_len:
                 continue
             if w in _FORMULA_STRUCTURE_TOKENS:
                 continue
-            # Skip subscript/superscript structural patterns like _(j) ^(2)
             if w.startswith("_(") or w.startswith("^("):
                 continue
-            # Skip tokens that are mostly numeric (e.g. "1.23" "3.14e-5")
             cleaned = w.replace(".", "").replace("-", "").replace("e", "")
             if cleaned.isdigit():
                 continue
@@ -1282,10 +1146,10 @@ def _truncate_chunks(chunks: list[str], max_words: int) -> list[str]:
 def _filter_chunks(chunks: list[str]) -> list[str]:
     """
     Remove chunks that are mostly non-linguistic content:
-    - Binary / matrix rows  (e.g. "0 0 1 0 0 1 1 0 ...")
-    - Very short chunks (fewer than 8 words)
-    - Chunks where > 55% of tokens are purely numeric / single binary digits
-    - Chunks with very low unique-word ratio (repetitive symbol noise)
+    - Binary / matrix rows (e.g. "0 0 1 0 0 1 1 0 ...")
+    - Fewer than 8 words
+    - More than 55% purely numeric / single binary digit tokens
+    - Very low unique-word ratio (repetitive symbol noise)
     """
     filtered = []
     for chunk in chunks:
@@ -1294,7 +1158,7 @@ def _filter_chunks(chunks: list[str]) -> list[str]:
             continue
 
         numeric = sum(
-                       1 for w in words
+            1 for w in words
             if w in ("0", "1") or w.replace(".", "").replace("-", "").isdigit()
         )
         if numeric / len(words) > 0.55:
@@ -1304,7 +1168,6 @@ def _filter_chunks(chunks: list[str]) -> list[str]:
         if single_char / len(words) > 0.70:
             continue
 
-        # Catch very low linguistic diversity (e.g. repeated symbol sequences)
         unique_ratio = len(set(words)) / len(words)
         if unique_ratio < 0.10 and len(words) > 20:
             continue
@@ -1324,10 +1187,6 @@ def _filter_chunks(chunks: list[str]) -> list[str]:
 def _format_flagged_chunks(flagged_map: dict[int, dict]) -> list[dict]:
     return [{"chunk_idx": idx, **info} for idx, info in sorted(flagged_map.items())]
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Antiplagiarism Engine CLI")

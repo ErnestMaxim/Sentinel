@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useForm } from '@tanstack/react-form'
-import { Link, useNavigate } from 'react-router-dom' // Link used for forgot-password
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { login, redirectToGoogle } from '../../api/auth'
 import styles from './SigninPage.module.css'

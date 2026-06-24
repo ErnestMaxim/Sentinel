@@ -1,5 +1,3 @@
-// ── renderCover.ts ────────────────────────────────────────────────────────────
-
 import jsPDF from 'jspdf'
 import {
   C, CW, FONT_BODY, FONT_TINY, FONT_SMALL,
@@ -61,7 +59,6 @@ export function renderCover(
   doc.setLineWidth(0.5)
   doc.circle(CX, CY, R, 'S')
 
-  // Arc: draw as a thick stroke arc using many small line segments
   const arcPct  = Math.min(sim / 100, 1)
   const arcStart = -Math.PI / 2
   const arcEnd   = arcStart + arcPct * 2 * Math.PI
@@ -172,16 +169,15 @@ export function renderCover(
     const ROW_H = 14
     const isLast = i === data.sources.length - 1
 
-    // Row background — subtle alternating
+    // Row background
     if (i % 2 === 1) fillRounded(doc, ML, y, CW, ROW_H, 0, C.cardBg)
 
-    // Bottom divider (not after last)
+    // Bottom divider
     if (!isLast) {
       doc.setDrawColor(...C.border)
       doc.setLineWidth(0.15)
       doc.line(ML, y + ROW_H, PW - MR, y + ROW_H)
     } else {
-      // Last row: bottom border to close the table
       doc.setDrawColor(...C.border)
       doc.setLineWidth(0.15)
       doc.line(ML, y + ROW_H, PW - MR, y + ROW_H)

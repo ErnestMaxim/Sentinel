@@ -4,12 +4,6 @@ import { useGSAP } from '@gsap/react'
 
 /**
  * Entrance wrapper — GSAP fades + lifts the incoming page on mount.
- *
- * Usage in AppLayout:
- *   <PageTransition key={pathname}>
- *     <Outlet />
- *   </PageTransition>
- *
  * The `key` prop causes React to unmount the old instance and mount a fresh
  * one on every route change, firing the entrance animation for each new page.
  */

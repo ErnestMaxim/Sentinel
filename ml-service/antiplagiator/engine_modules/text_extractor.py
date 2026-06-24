@@ -156,11 +156,6 @@ class TextExtractor:
         raw = re.sub(r'\s+', ' ', raw).strip()
 
         # Strip trailing reference / bibliography sections.
-        # The old guard (m.start() > len(raw) * 0.75) missed papers where
-        # references appear in the first half or are labelled "Notes", "Endnotes",
-        # etc.  We now strip unconditionally from the first occurrence of a
-        # section header that consists *only* of a reference-like keyword
-        # (anchored by word boundaries and surrounded by minimal context).
         _REF_SECTION = re.compile(
             r'(?<!\w)'                             # not preceded by a word char
             r'(References?|Bibliography|Endnotes?|Notes?|Works\s+Cited)'
@@ -169,11 +164,7 @@ class TextExtractor:
         )
         m = _REF_SECTION.search(raw)
         if m:
-            # Only strip if the keyword is acting as a section heading:
-            # must be followed by a citation-like pattern (digit, author name,
-            # or bracket) within the next 200 chars, OR appear after at least
-            # 20% of the document so we don't accidentally clip an abstract
-            # that mentions "references to prior work".
+            # Only strip if the keyword is acting as a section heading
             tail = raw[m.end(): m.end() + 200]
             looks_like_bib = bool(re.search(
                 r'^\s*[\[\(]?\d|^\s*[A-Z][a-z]+\s+[A-Z]|doi:|http',
@@ -182,12 +173,7 @@ class TextExtractor:
             if looks_like_bib or m.start() > len(raw) * 0.20:
                 raw = raw[:m.start()]
 
-        # Additionally strip numbered footnote / endnote blocks anywhere in
-        # the text.  These look like:
-        #   "26. see note 1, fuchs 2021, at 92; ..."
-        # and score 100% against the citation lists in the FAISS database.
-        # We detect a run of ≥ 2 consecutive numbered items (n. <text> n+1. ...)
-        # and drop everything from the first such run onward.
+        # Additionally strip numbered footnote / endnote blocks anywhere in the text. 
         _FOOTNOTE_BLOCK = re.compile(
             # Two or more consecutive numbered items: "24. ... 25. ..."
             r'(?<!\d)(\d{1,3})\.\s+\S.{0,300}?(?<!\d)(\d{1,3})\.\s+\S',
@@ -196,7 +182,6 @@ class TextExtractor:
         fm = _FOOTNOTE_BLOCK.search(raw)
         if fm:
             # Confirm the two numbers are consecutive to avoid false positives
-            # on legitimate prose like "step 3. ... step 5. ..."
             n1, n2 = int(fm.group(1)), int(fm.group(2))
             if abs(n2 - n1) <= 2 and n1 >= 1:
                 raw = raw[:fm.start()]

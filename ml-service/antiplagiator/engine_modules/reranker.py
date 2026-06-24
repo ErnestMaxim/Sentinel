@@ -9,9 +9,7 @@ LOGGER = logging.getLogger("antiplagiator.reranker")
 
 DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
-# Cross-encoder scores are logits (unbounded). These thresholds were calibrated
-# on MS-MARCO and work reasonably well for academic prose.
-# Adjust based on your false-positive/false-negative tolerance.
+# Cross-encoder scores are logits (unbounded).
 PARAPHRASE_SCORE_THRESHOLD = 0.0   # logit > 0 means "relevant / semantically similar"
 HIGH_CONFIDENCE_THRESHOLD  = 3.0   # logit > 3 means "very likely paraphrase"
 

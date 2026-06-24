@@ -26,6 +26,7 @@ export function useAnalysis() {
 }
 
 const PIPE_STEPS = 5
+const MAX_BYTES  = 20 * 1024 * 1024   // 20 MB
 
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [file,     setFile]     = useState<File | null>(null)
@@ -40,8 +41,18 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
 
   function acceptFile(f: File) {
     const allowed = ['.pdf', '.docx', '.txt']
-    if (!allowed.some(ext => f.name.endsWith(ext))) {
-      setErrorMsg('Only PDF, DOCX, or TXT files are supported.')
+    if (!allowed.some(ext => f.name.toLowerCase().endsWith(ext))) {
+      setErrorMsg(`"${f.name}" is not supported. Please upload a PDF, DOCX, or TXT file.`)
+      setStage('error')
+      return
+    }
+    if (f.size === 0) {
+      setErrorMsg(`"${f.name}" appears to be empty. Please check the file and try again.`)
+      setStage('error')
+      return
+    }
+    if (f.size > MAX_BYTES) {
+      setErrorMsg(`"${f.name}" is ${(f.size / 1024 / 1024).toFixed(1)} MB — over the 20 MB limit. Compress or split the file and try again.`)
       setStage('error')
       return
     }

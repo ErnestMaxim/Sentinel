@@ -31,8 +31,6 @@ const COMPARE_ROWS = [
 ]
 
 /* ── Structural Text Mesh data ─────────────────────────────────────────────── */
-// 14 vertices per mesh, index 0-9 = outer perimeter, 10-13 = inner core
-// SVG viewBox 0 0 480 220, center at (240,110)
 const MESH_A: [number, number][] = [
   [50,58],[75,38],[104,33],[132,48],[148,76],
   [140,110],[118,132],[88,138],[60,120],[44,90],
@@ -50,7 +48,6 @@ const MESH_EDGES: [number,number][] = [
   [6,13],[7,13],[8,13],[9,13],[9,10],
   [10,11],[11,12],[12,13],[13,10],[11,13],
 ]
-// Right-facing nodes of A / left-facing nodes of B → drawn to center
 const CONN_NODES = [3, 4, 5, 11, 12]
 
 const HIGHLIGHTS = [
@@ -72,14 +69,6 @@ const HIGHLIGHTS = [
 ]
 
 /* ── Sub-components ────────────────────────────────────────────────────────── */
-
-/**
- * Velocity-aware marquee — GSAP drives the x position; Observer bumps the
- * timeScale on scroll so the strip accelerates with the page and decelerates
- * back to cruise speed 1.5s later.
- *
- * The CSS `animation:` on `.marqueeTrack` is disabled via `style={{ animation: 'none' }}`.
- */
 function GsapMarquee() {
   const wrapRef  = useRef<HTMLDivElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
@@ -88,7 +77,6 @@ function GsapMarquee() {
     const track = trackRef.current
     if (!track) return
 
-    // Drive from x=0 → x='-50%' (we have 2 copies, so -50% = one full set)
     const tl = gsap.to(track, {
       x: '-50%',
       duration: 40,
@@ -96,7 +84,6 @@ function GsapMarquee() {
       repeat: -1,
     })
 
-    // Observe scroll velocity and accelerate the marquee
     let decelerateId: ReturnType<typeof setTimeout>
     Observer.create({
       target: window,
@@ -126,18 +113,13 @@ function GsapMarquee() {
   )
 }
 
-/**
- * Highlight card with GSAP 3-D tilt on hover.
- * Each card is self-contained — useTilt creates its own scope.
- */
 function TiltHighlightCard({
   h, i,
 }: {
   h: typeof HIGHLIGHTS[number]
   i: number
 }) {
-  // useTilt returns contextSafe handlers that access refs — opt out of
-  // React Compiler memoization to suppress false-positive ref warnings.
+
   "use no memo"
   const tilt = useTilt<HTMLDivElement>(9)
   return (
@@ -158,10 +140,6 @@ function TiltHighlightCard({
 }
 
 /** Animated circular score ring */
-/**
- * ScoreRing — used both in TextMeshViz (reactive, no animation) and the
- * SimilarityDemo (animated=true, arc draws in on scroll with power4.out).
- */
 function ScoreRing({ score = 91, size = 128, animated = false }:
   { score?: number; size?: number; animated?: boolean }) {
   const r    = size * 0.38
@@ -226,9 +204,6 @@ function ScoreRing({ score = 91, size = 128, animated = false }:
 
 /**
  * Ambient orbs that follow the cursor.
- * Uses gsap.quickTo — zero React re-renders, silky 60fps parallax.
- * The previous approach (useState + mousemove → re-render → CSS transition)
- * caused one full React render per mousemove event.
  */
 function HeroAmbient() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -271,20 +246,12 @@ function HeroAmbient() {
 }
 
 /**
- * Stat item — count-up + SVG arc ring draw-on, driven entirely by GSAP.
- *
- * On scroll entry:
- *   1. The card slides up from y:40 (entrance)
- *   2. The arc draws from 0 → fillPct in sync with the count-up (shared timeline)
- *   3. On complete, the number flashes with a quick scale pop
- *
- * fillPct = min(num, 100) / 100 — maps the stat value to an arc fraction.
- * Works for all four stats: 100 (K+), 60 (s), 99 (%), 100 (%).
+ * Stat item
  */
 function StatItem({ num, suffix, prefix = '', label }:
   { num: number; suffix: string; prefix?: string; label: string }) {
   const r        = 68
-  const circ     = 2 * Math.PI * r          // ≈ 427.26
+  const circ     = 2 * Math.PI * r
   const fillPct  = Math.min(num, 100) / 100
   const finalDash = fillPct * circ
 
@@ -313,7 +280,7 @@ function StatItem({ num, suffix, prefix = '', label }:
       y: 40, opacity: 0, duration: 0.65, ease: 'power3.out',
     })
 
-    // Arc draw + count-up in parallel — slight overlap with entrance
+    // Arc draw + count-up in parallel
     const proxy = { dash: 0, count: 0 }
     tl.to(proxy, {
       dash: finalDash,
@@ -325,7 +292,6 @@ function StatItem({ num, suffix, prefix = '', label }:
         span.textContent = String(Math.round(proxy.count))
       },
       onComplete() {
-        // Quick scale pop on the number to celebrate completion
         gsap.to(spanRef.current, {
           scale: 1.14, duration: 0.22, ease: 'power2.out',
           yoyo: true, repeat: 1,
@@ -364,9 +330,7 @@ function StatItem({ num, suffix, prefix = '', label }:
 }
 
 /**
- * Scroll-pinned statement — each word brightens as you scroll through the section.
- * GSAP ScrollTrigger (scrub: 0.4) replaces the manual scroll listener + React state pattern,
- * eliminating per-frame state updates and React re-renders entirely.
+ * Scroll-pinned statement
  */
 function StatementPinned() {
   const sectionRef = useRef<HTMLElement>(null)
@@ -392,7 +356,6 @@ function StatementPinned() {
       },
     })
 
-    // Spread word reveals across 90% of the scroll distance
     words.forEach((word, i) => {
       tl.to(word, { opacity: 1, color: '#f5f5f7', duration: 0.055 }, (i / N) * 0.88)
     })
@@ -423,11 +386,8 @@ function StatementPinned() {
 
 /**
  * TextMeshViz — Structural Text Mesh visualization.
- * Two wireframe mesh blobs (white = original, gold = matched) converge on hover.
- * GSAP drives SVG group x-translation + score lerp; CSS handles node pulse.
  */
 function TextMeshViz() {
-  // contextSafe needed because handleEnter/handleLeave run outside useGSAP.
   "use no memo"
 
   const vizRef   = useRef<HTMLDivElement>(null)
@@ -563,8 +523,7 @@ function TextMeshViz() {
 }
 
 /**
- * LatexViz — formula cards stagger in with back.out pop when scrolled into view.
- * Cards use data-latex-card so GSAP can target them without CSS module mangling.
+ * LatexViz
  */
 function LatexViz() {
   const formulas = [
@@ -756,9 +715,6 @@ export default function HomePage() {
 
   useGSAP(() => {
     /* ── 1. Hero entrance timeline ─────────────────────────────────────────── */
-    // A coordinated GSAP timeline replaces the per-element CSS @keyframes.
-    // Benefits: precise sequencing with overlapping, single point of control,
-    // can be paused/reversed, and works before CSS is fully parsed.
     gsap.timeline({ defaults: { ease: 'power3.out' } })
       .from('[data-hero="logo"]',   { opacity: 0, scale: 0.80, y: 12, filter: 'blur(18px)', duration: 1.4 })
       .from('[data-hero="line1"]',  { opacity: 0, y: 30, filter: 'blur(8px)',  duration: 1.0 }, '-=0.85')
@@ -768,8 +724,6 @@ export default function HomePage() {
       .from('[data-hero="scroll"]', { opacity: 0, y: 20, duration: 0.8 },                      '-=0.42')
 
     /* ── 2. Scroll-driven batch reveals ────────────────────────────────────── */
-    // Replaces @supports (animation-timeline: view()) — cross-browser,
-    // fine-grained, and staggers multiple elements that enter together.
     ScrollTrigger.batch('[data-reveal="up"]', {
       onEnter: (batch: Element[]) => gsap.fromTo(batch,
         { opacity: 0, y: 52, filter: 'blur(10px)' },
@@ -826,8 +780,6 @@ export default function HomePage() {
     })
 
     /* ── 5. How-it-works pipeline cascade ─────────────────────────────────── */
-    // Cards pop in with back.out (slight overshoot) in a 150ms stagger cascade.
-    // Connectors (→) slide in after the cards with a short delay.
     ScrollTrigger.batch('[data-how-card]', {
       onEnter: (batch: Element[]) => {
         gsap.fromTo(
@@ -855,8 +807,6 @@ export default function HomePage() {
     })
 
     /* ── 6. Comparison rows — individual stagger ───────────────────────────── */
-    // Each row slides in independently so the left column and right column
-    // reveal at slightly different rates, adding visual depth.
     ScrollTrigger.batch('[data-compare-row="sentinel"]', {
       onEnter: (batch: Element[]) => gsap.fromTo(
         batch,
@@ -877,8 +827,6 @@ export default function HomePage() {
     })
 
     /* ── 8. Gap orb scrub parallax ────────────────────────────────────────── */
-    // The background orb in the "The gap" section drifts upward and scales
-    // as you scroll past it — adds depth without a heavy 3-D layer.
     gsap.to('[data-gap-orb]', {
       y: -90, scale: 1.25,
       ease: 'none',
@@ -891,8 +839,6 @@ export default function HomePage() {
     })
 
     /* ── 9. For-students list stagger ──────────────────────────────────────── */
-    // Each feature bullet slides in from the left with 100ms offset so the
-    // list feels like it's being typed out rather than appearing all at once.
     ScrollTrigger.batch('[data-student-li]', {
       onEnter: (batch: Element[]) => gsap.fromTo(
         batch,
@@ -908,8 +854,6 @@ export default function HomePage() {
     })
 
     /* ── 10. Demo mark sweep (clip-path wipe) ──────────────────────────────── */
-    // The two highlighted <mark> spans in the SimilarityDemo wipe in from
-    // left→right using clip-path — the "reveal" effect shows text being marked.
     ScrollTrigger.batch('[data-demo-mark]', {
       onEnter: (batch: Element[]) => gsap.fromTo(
         batch,
@@ -924,8 +868,6 @@ export default function HomePage() {
     })
 
     /* ── 11. CTA periodic attention pulse ──────────────────────────────────── */
-    // Once the final CTA scrolls into view, it subtly pulses every ~4 s to
-    // draw the eye back — scale + brightness, no layout shift.
     const ctaPulse = gsap.timeline({ repeat: -1, repeatDelay: 3.8, paused: true })
       .to('[data-cta-pulse]', { scale: 1.032, filter: 'brightness(1.18)', duration: 0.55, ease: 'power2.out' })
       .to('[data-cta-pulse]', { scale: 1,     filter: 'brightness(1)',    duration: 0.75, ease: 'power2.inOut' })

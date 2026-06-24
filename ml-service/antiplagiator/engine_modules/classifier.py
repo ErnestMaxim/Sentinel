@@ -1,14 +1,3 @@
-"""
-classifier.py — SentinelMLP PyTorch architecture + sklearn-compatible wrapper.
-
-These classes must be importable at the time joblib loads category_classifier_v2.pkl,
-because the pickle stores class references as "__main__.SentinelMLP" etc.
-(they were defined in a Colab notebook whose __main__ is not uvicorn's __main__).
-
-engine.py calls `register_classifier_classes()` BEFORE joblib.load() so that
-`sys.modules["__main__"]` exposes the right classes.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -23,7 +12,6 @@ LOGGER = logging.getLogger("antiplagiator.classifier")
 
 
 # ── Architecture ──────────────────────────────────────────────────────────────
-
 class ResidualBlock(nn.Module):
     def __init__(self, dim: int, dropout: float) -> None:
         super().__init__()
@@ -82,7 +70,6 @@ class SentinelMLP(nn.Module):
 
 
 # ── sklearn-compatible wrapper ────────────────────────────────────────────────
-
 class SentinelMLPWrapper:
     """
     Drop-in replacement for the sklearn MLPClassifier artifact.
@@ -110,7 +97,6 @@ class SentinelMLPWrapper:
         self._device:   torch.device | None = None
 
     # ── sklearn compatibility (category_router uses these) ────────────────
-
     @property
     def classes_(self) -> np.ndarray:
         return self.le.classes_
@@ -144,9 +130,9 @@ class SentinelMLPWrapper:
         )
 
     # predict_proba accepts:
-    #   - np.ndarray of shape (n, dim)           — pre-computed embeddings
-    #   - list/tuple of np.ndarray               — e.g. [embedding] from category_router
-    #   - list of str                             — raw texts to encode
+    #   - np.ndarray of shape (n, dim)
+    #   - list/tuple of np.ndarray 
+    #   - list of str
     def predict_proba(self, inputs, device: str = "cpu") -> np.ndarray:
         self._ensure_loaded(device)
         if isinstance(inputs, np.ndarray):
@@ -186,9 +172,6 @@ def register_classifier_classes() -> None:
     Register SentinelMLP, SentinelMLPWrapper, and ResidualBlock on the
     __main__ module so that joblib/pickle can find them when loading a .pkl
     that was saved from a Colab notebook (where __main__ was the notebook).
-
-    Call this ONCE before joblib.load() in engine._setup_classifier().
-    It is idempotent — safe to call multiple times.
     """
     main = sys.modules.get("__main__")
     if main is None:

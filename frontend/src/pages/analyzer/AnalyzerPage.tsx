@@ -98,7 +98,6 @@ export default function AnalyzerPage() {
     try {
       await generatePdfReport(analysis.report, analysis.docInfo.filename, reportFilter)
     } catch {
-      // swallow — download failure is non-critical
     }
     setDownloading(false)
   }

@@ -1,5 +1,3 @@
-// ── layout.ts ─────────────────────────────────────────────────────────────────
-
 import jsPDF from 'jspdf'
 import { C, CW, FONT_TINY, ML, MR, PH, PW } from './helpers/constants'
 import { fillRect, wrap } from './primitives'

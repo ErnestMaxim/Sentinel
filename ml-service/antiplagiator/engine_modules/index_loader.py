@@ -14,7 +14,6 @@ LOGGER = logging.getLogger("antiplagiator.index_loader")
 # ---------------------------------------------------------------------------
 # Global index
 # ---------------------------------------------------------------------------
-
 def load_global_index(
     artifacts_dir: Path,
     nprobe: int,
@@ -47,7 +46,6 @@ def load_global_index(
 # ---------------------------------------------------------------------------
 # Per-category indexes
 # ---------------------------------------------------------------------------
-
 def load_per_category_indexes(
     cat_dir: Path,
     nprobe: int,

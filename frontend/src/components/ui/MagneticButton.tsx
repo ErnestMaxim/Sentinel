@@ -5,7 +5,6 @@ import styles from './MagneticButton.module.css'
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode
-  /** How far the inner content follows the cursor (0–1, default 0.38) */
   strength?: number
 }
 
@@ -16,11 +15,6 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
  * Works as a drop-in replacement for <button> — forwards all standard
  * button props. The magnetic effect lives on a `<span>` wrapper inside,
  * so the button's size/border/background stay fixed.
- *
- * Example:
- *   <MagneticButton className={styles.analyzeBtn} onClick={analyze}>
- *     Run plagiarism check
- *   </MagneticButton>
  */
 export default function MagneticButton({
   children,
@@ -28,9 +22,6 @@ export default function MagneticButton({
   className,
   ...rest
 }: Props) {
-  // contextSafe callbacks access ref.current at event-time, not during render.
-  // React Compiler mis-identifies these as unsafe ref reads — opt out of its
-  // memoization pass to suppress the false-positive warning.
   "use no memo"
 
   const btnRef   = useRef<HTMLButtonElement>(null)

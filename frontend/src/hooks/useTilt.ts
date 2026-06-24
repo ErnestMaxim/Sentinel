@@ -8,18 +8,9 @@ import { useGSAP } from '@gsap/react'
  *
  * Returns a ref + two event handlers; spread them onto the target element:
  *
- *   const tilt = useTilt<HTMLDivElement>()
- *   <div ref={tilt.ref} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave}>
- *
- * The element must have a non-flat `transform-style` context if its children
- * need to participate in the 3-D — add `transform-style: preserve-3d` to the
- * element's CSS if that effect is wanted.
- *
  * @param strength  Max rotation in degrees (default 10)
  */
 export function useTilt<T extends HTMLElement>(strength = 10) {
-  // contextSafe callbacks access ref.current at event-time, not during render.
-  // React Compiler flags these as unsafe — "use no memo" suppresses the warning.
   "use no memo"
 
   const ref = useRef<T>(null)

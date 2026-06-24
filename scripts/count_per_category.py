@@ -1,22 +1,3 @@
-"""
-count_per_category.py
----------------------
-Numără articole (sau fragmente) per categorie din fișierele JSONL ale corpusului.
-
-Utilizare:
-    # Pe fișierul de articole (un rând = un articol):
-    python count_per_category.py --input arxiv_dataset.jsonl
-
-    # Pe fișierul de fragmente (un rând = un fragment):
-    python count_per_category.py --input chunked_database.jsonl --mode chunks
-
-    # Numărare după subcategorie în loc de categoria principală:
-    python count_per_category.py --input arxiv_dataset.jsonl --field primary_category
-
-    # Salvează și rezultatele într-un fișier CSV:
-    python count_per_category.py --input arxiv_dataset.jsonl --csv rezultate.csv
-"""
-
 from __future__ import annotations
 
 import argparse

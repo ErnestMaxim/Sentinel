@@ -11,7 +11,6 @@ import {
   ChevronRight,
   LogOut,
   LogIn,
-  UserPlus,
   Menu,
 } from 'lucide-react'
 import { useAnalysis } from '../../../context/AnalysisContext'
@@ -27,9 +26,15 @@ const NAV_ITEMS = [
 
 // All routes in navigation order for direction detection
 const ROUTE_ORDER: Record<string, number> = {
-  '/': 0, '/check': 1, '/history': 2, '/settings': 3,
-  '/report': 4, '/signin': 5, '/signup': 6,
-  '/forgot-password': 7, '/reset-password': 8,
+  '/': 0,
+  '/check': 1,
+  '/history': 2,
+  '/settings': 3,
+  '/report': 4,
+  '/signin': 5,
+  '/signup': 6,
+  '/forgot-password': 7,
+  '/reset-password': 8,
 }
 
 function setNavDirection(from: string, to: string) {
@@ -218,15 +223,6 @@ export default function Navbar() {
               >
                 <span className={styles.icon}><LogIn size={16} /></span>
                 {!collapsed && <span className={styles.label}>Sign in</span>}
-              </button>
-
-              <button
-                type="button"
-                className={[styles.cta, collapsed ? styles.ctaCollapsed : ''].join(' ')}
-                onClick={() => handleNavTo('/signup')}
-                title={collapsed ? 'Get started' : undefined}
-              >
-                {collapsed ? <UserPlus size={16} /> : 'Get started'}
               </button>
             </>
           )}
