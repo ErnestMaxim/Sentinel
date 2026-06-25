@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { EngineReport } from '../../../types/documents'
-import { uploadDocument, analyzeDocument } from '../api'
+import { uploadDocument, startAnalysis, pollAnalysis } from '../api'
 import { generatePdfReport } from '../../../utils/report'
 
 export type Stage = 'idle' | 'uploading' | 'analyzing' | 'done' | 'error'
@@ -67,10 +67,10 @@ export function useDocumentAnalysis(): AnalysisState {
       const uploaded = await uploadDocument(file)
 
       setStage('analyzing')
-      const [analyzed] = await Promise.all([
-        analyzeDocument(uploaded.id),
-        animatePipeline(),
-      ])
+      await startAnalysis(uploaded.id)
+      animatePipeline()
+
+      const analyzed = await pollAnalysis(uploaded.id)
 
       if (!analyzed.report?.report_data) throw new Error('Engine returned no report data.')
 
