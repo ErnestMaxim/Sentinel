@@ -212,7 +212,7 @@ async def analyze(req: AnalyzeRequest):
         )
 
     # Download file from signed URL
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.get(req.file_url)
         resp.raise_for_status()
 

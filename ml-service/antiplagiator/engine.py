@@ -44,7 +44,7 @@ from engine_modules.utils import build_session, resolve_device
 
 LOGGER = logging.getLogger("plagiarism_engine")
 
-MAX_WORDS                        = 50_000
+MAX_WORDS                        = 100_000 
 ROUTING_SAMPLE_SIZE              = 8
 HIGH_CONFIDENCE_THRESHOLD        = 0.90
 MIN_EXACT_PHRASE_CHARS           = 50

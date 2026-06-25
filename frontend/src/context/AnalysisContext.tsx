@@ -1,20 +1,20 @@
 import { createContext, useContext, useState, useRef, type ReactNode } from 'react'
 import type { EngineReport } from '../types/documents'
 import type { DocInfo, Stage } from '../pages/analyzer/hooks/useDocumentAnalysis'
-import { uploadDocument, analyzeDocument } from '../pages/analyzer/api'
+import { uploadDocument, startAnalysis, pollAnalysis } from '../pages/analyzer/api'
 import { generatePdfReport } from '../utils/report'
 
 interface AnalysisContextValue {
-  file:        File | null
-  stage:       Stage
-  pipeStep:    number
-  report:      EngineReport | null
-  docInfo:     DocInfo | null
-  errorMsg:    string
-  isRunning:   boolean
-  acceptFile:  (f: File) => void
-  analyze:     () => Promise<void>
-  reset:       () => void
+  file:       File | null
+  stage:      Stage
+  pipeStep:   number
+  report:     EngineReport | null
+  docInfo:    DocInfo | null
+  errorMsg:   string
+  isRunning:  boolean
+  acceptFile: (f: File) => void
+  analyze:    () => Promise<void>
+  reset:      () => void
 }
 
 const AnalysisContext = createContext<AnalysisContextValue | null>(null)
@@ -26,7 +26,7 @@ export function useAnalysis() {
 }
 
 const PIPE_STEPS = 5
-const MAX_BYTES  = 20 * 1024 * 1024   // 20 MB
+const MAX_BYTES  = 20 * 1024 * 1024
 
 export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [file,     setFile]     = useState<File | null>(null)
@@ -36,7 +36,6 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
   const [docInfo,  setDocInfo]  = useState<DocInfo | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // Prevents double-trigger if analyze() is called twice
   const runningRef = useRef(false)
 
   function acceptFile(f: File) {
@@ -76,15 +75,19 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
     runningRef.current = true
     setReport(null); setErrorMsg(''); setPipeStep(0)
 
+    const abortController = new AbortController()
+
     try {
       setStage('uploading')
       const uploaded = await uploadDocument(file)
 
       setStage('analyzing')
-      const [analyzed] = await Promise.all([
-        analyzeDocument(uploaded.id),
-        animatePipeline(),
-      ])
+
+      await startAnalysis(uploaded.id)
+
+      animatePipeline()
+
+      const analyzed = await pollAnalysis(uploaded.id, abortController.signal)
 
       if (!analyzed.report?.report_data) throw new Error('Engine returned no report data.')
 
@@ -102,6 +105,7 @@ export function AnalysisProvider({ children }: { children: ReactNode }) {
       setStage('error')
     } finally {
       runningRef.current = false
+      abortController.abort()
     }
   }
 
