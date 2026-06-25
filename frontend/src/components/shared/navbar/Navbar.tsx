@@ -19,12 +19,11 @@ const SIDEBAR_FULL = 220
 const SIDEBAR_MINI = 64
 
 const NAV_ITEMS = [
-  { label: 'Home',            href: '/',        icon: Home       },
-  { label: 'Check Document',  href: '/check',   icon: ScanSearch },
-  { label: 'History',         href: '/history', icon: History    },
+  { label: 'Home',           href: '/',        icon: Home,       authRequired: false },
+  { label: 'Check Document', href: '/check',   icon: ScanSearch, authRequired: true  },
+  { label: 'History',        href: '/history', icon: History,    authRequired: true  },
 ]
 
-// All routes in navigation order for direction detection
 const ROUTE_ORDER: Record<string, number> = {
   '/': 0,
   '/check': 1,
@@ -83,8 +82,8 @@ export default function Navbar() {
     startPageTransition(() => navigate(to))
   }
 
-  const activeNavIndex = NAV_ITEMS.findIndex(({ href }) => pathname === href)
-
+  const visibleNavItems = NAV_ITEMS.filter(item => !item.authRequired || !!user)
+  const activeNavIndex = visibleNavItems.findIndex(({ href }) => pathname === href)
   const pillY = activeNavIndex >= 0 ? activeNavIndex * 46 : -200
 
   return (
@@ -142,7 +141,6 @@ export default function Navbar() {
 
         {/* Nav links */}
         <nav className={styles.nav}>
-          {/* Sliding active-state pill */}
           {activeNavIndex >= 0 && (
             <div
               className={[
@@ -154,7 +152,7 @@ export default function Navbar() {
             />
           )}
 
-          {NAV_ITEMS.map(({ label, href, icon: Icon }) => (
+          {visibleNavItems.map(({ label, href, icon: Icon }) => (
             <button
               key={label}
               type="button"
@@ -214,17 +212,15 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <>
-              <button
-                type="button"
-                className={styles.item}
-                onClick={() => handleNavTo('/signin')}
-                title={collapsed ? 'Sign in' : undefined}
-              >
-                <span className={styles.icon}><LogIn size={16} /></span>
-                {!collapsed && <span className={styles.label}>Sign in</span>}
-              </button>
-            </>
+            <button
+              type="button"
+              className={styles.item}
+              onClick={() => handleNavTo('/signin')}
+              title={collapsed ? 'Sign in' : undefined}
+            >
+              <span className={styles.icon}><LogIn size={16} /></span>
+              {!collapsed && <span className={styles.label}>Sign in</span>}
+            </button>
           )}
         </div>
       </aside>

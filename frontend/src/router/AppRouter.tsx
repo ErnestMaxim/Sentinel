@@ -1,4 +1,4 @@
-import { Route, Routes, Outlet } from 'react-router-dom'
+import { Route, Routes, Outlet, Navigate } from 'react-router-dom'
 import HomePage           from '../pages/home/HomePage'
 import SigninPage         from '../pages/login/SigninPage'
 import SignupPage         from '../pages/register/SignupPage'
@@ -11,8 +11,8 @@ import SettingsPage       from '../pages/settings/SettingsPage'
 import AuthShell          from '../components/ui/AuthShell'
 import AppLayout          from '../components/ui/AppLayout'
 import ReportPage         from '../pages/report/ReportPage'
+import { useAuth }        from '../context/AuthContext'
 
-// Auth layout: AuthShell mounts once while navigating between auth pages
 function AuthLayout() {
   return (
     <AuthShell>
@@ -21,23 +21,31 @@ function AuthLayout() {
   )
 }
 
+function PrivateRoute() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  return user ? <Outlet /> : <Navigate to="/signin" replace />
+}
+
 export default function AppRouter() {
   return (
     <Routes>
-      {/* ── Main app — Navbar lives here, survives all route swaps ── */}
       <Route element={<AppLayout />}>
-        <Route path="/"         element={<HomePage />} />
-        <Route path="/check"    element={<AnalyzerPage />} />
-        <Route path="/report"   element={<ReportPage />} />
-        <Route path="/history"  element={<HistoryPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*"         element={<HomePage />} />
+        {/* Public */}
+        <Route path="/"    element={<HomePage />} />
+        <Route path="*"    element={<HomePage />} />
+
+        {/* Protected */}
+        <Route element={<PrivateRoute />}>
+          <Route path="/check"    element={<AnalyzerPage />} />
+          <Route path="/report"   element={<ReportPage />} />
+          <Route path="/history"  element={<HistoryPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
       </Route>
 
-      {/* ── OAuth callback (no chrome needed) ── */}
       <Route path="/oauth-callback" element={<GoogleCallback />} />
 
-      {/* ── Auth pages — AuthShell persists, only Outlet content swaps ── */}
       <Route element={<AuthLayout />}>
         <Route path="/signin"          element={<SigninPage />} />
         <Route path="/signup"          element={<SignupPage />} />
