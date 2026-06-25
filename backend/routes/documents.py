@@ -17,6 +17,7 @@ from models import Document, DocumentStatus, PlagiarismReport
 from schemas.documents import DocumentResponse
 from routes.auth import get_current_user
 from utils.storage import upload_file, get_signed_url
+from fastapi.responses import RedirectResponse
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 logger = logging.getLogger(__name__)
@@ -155,6 +156,25 @@ async def upload_document(
     db.refresh(new_doc)
     return new_doc
 
+@router.get("/{document_id}/file")
+def get_document_file(
+    document_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a short-lived signed URL for the original uploaded file and redirect to it."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+        Document.is_deleted == False,
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if not doc.file_path:
+        raise HTTPException(status_code=404, detail="File not available")
+
+    signed_url = get_signed_url(doc.file_path, expires_in=300)
+    return RedirectResponse(url=signed_url, status_code=302)
 
 @router.post("/{document_id}/analyze", response_model=DocumentResponse)
 def analyze_document(
